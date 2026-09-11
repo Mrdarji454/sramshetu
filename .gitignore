@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Env and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Build
+dist/
+build/
+.vite/
+coverage/
+
+# ML artifacts and data dumps
+ai-service/app/ml/artifacts/*.json
+ai-service/app/ml/artifacts/*.pkl
+ai-service/app/ml/artifacts/*.ubj
+ai-service/app/ml/artifacts/*.bin
+ai-service/data/raw/*
+ai-service/data/processed/*
+!ai-service/app/ml/artifacts/.gitkeep
+!ai-service/data/raw/.gitkeep
+!ai-service/data/processed/.gitkeep
+
+# Logs and OS
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
