@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../utils/cn";
 
-export function Navbar() {
+export function Navbar({ onSelectRole }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [language, setLanguage] = useState("EN"); // 'EN' or 'HI'
@@ -54,24 +54,28 @@ export function Navbar() {
 
   const roles = [
     {
+      id: "user",
       name: "Customer / Business",
       icon: UserCheck,
       desc: "Book verified artisans with escrow",
       badge: "Active",
     },
     {
+      id: "worker",
       name: "Worker / Shramik",
       icon: HardHat,
       desc: "100% direct payouts & welfare access",
       badge: "Join Guild",
     },
     {
+      id: "cooperative",
       name: "Cooperative Society",
       icon: Building2,
       desc: "Manage member roster & payouts",
       badge: "Registered",
     },
     {
+      id: "admin",
       name: "Admin Portal",
       icon: Lock,
       desc: "Audit trails & state registry oversight",
@@ -174,10 +178,15 @@ export function Navbar() {
                       {roles.map((role) => {
                         const Icon = role.icon;
                         return (
-                          <a
+                          <button
                             key={role.name}
-                            href="#portal"
-                            className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors group"
+                            type="button"
+                            onClick={() => {
+                              setRoleDropdownOpen(false);
+                              if (onSelectRole) onSelectRole(role.id);
+                              else window.location.hash = `#/${role.id}`;
+                            }}
+                            className="w-full text-left flex items-start gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors group"
                           >
                             <div className="p-2 rounded-md bg-slate-100 text-slate-700 group-hover:bg-brand-saffron-50 group-hover:text-brand-saffron-600 transition-colors">
                               <Icon className="w-4 h-4" />
@@ -192,7 +201,7 @@ export function Navbar() {
                                 {role.desc}
                               </p>
                             </div>
-                          </a>
+                          </button>
                         );
                       })}
                     </div>
@@ -256,15 +265,19 @@ export function Navbar() {
                 {roles.map((r) => {
                   const Icon = r.icon;
                   return (
-                    <a
+                    <button
                       key={r.name}
-                      href="#portal"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-100 flex items-center gap-2 text-xs font-medium text-slate-800"
+                      type="button"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        if (onSelectRole) onSelectRole(r.id);
+                        else window.location.hash = `#/${r.id}`;
+                      }}
+                      className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-100 flex items-center gap-2 text-xs font-medium text-slate-800 text-left"
                     >
-                      <Icon className="w-4 h-4 text-brand-saffron-600" />
+                      <Icon className="w-4 h-4 text-brand-saffron-600 flex-shrink-0" />
                       <span className="truncate">{r.name.split("/")[0]}</span>
-                    </a>
+                    </button>
                   );
                 })}
               </div>
