@@ -1,14 +1,14 @@
-import React from 'react';
-import { Navbar } from './components/common/Navbar';
-import { Footer } from './components/common/Footer';
-import { HeroSection } from './features/landing/HeroSection';
-import { StatsSection } from './features/landing/StatsSection';
-import { ServicesSection } from './features/landing/ServicesSection';
-import { HowItWorksSection } from './features/landing/HowItWorksSection';
-import { CooperativeSection } from './features/landing/CooperativeSection';
-import { VerifiedWorkersSection } from './features/landing/VerifiedWorkersSection';
-import { AiAllocationSection } from './features/landing/AiAllocationSection';
-import { CtaSection } from './features/landing/CtaSection';
+import React from "react";
+import { Navbar } from "./components/common/Navbar";
+import { Footer } from "./components/common/Footer";
+import { HeroSection } from "./features/landing/HeroSection";
+import { StatsSection } from "./features/landing/StatsSection";
+import { ServicesSection } from "./features/landing/ServicesSection";
+import { HowItWorksSection } from "./features/landing/HowItWorksSection";
+import { CooperativeSection } from "./features/landing/CooperativeSection";
+import { VerifiedWorkersSection } from "./features/landing/VerifiedWorkersSection";
+import { AiAllocationSection } from "./features/landing/AiAllocationSection";
+import { CtaSection } from "./features/landing/CtaSection";
 
 export default function App() {
   return (
@@ -48,4 +48,3 @@ export default function App() {
     </div>
   );
 }
-
