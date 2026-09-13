@@ -36,10 +36,20 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ['customer', 'user', 'worker', 'cooperative', 'admin'],
+        values: [
+          'USER',
+          'COOPERATIVE',
+          'WORKER',
+          'ADMIN',
+          'user',
+          'cooperative',
+          'worker',
+          'admin',
+          'customer',
+        ],
         message: '{VALUE} is not a supported ShramSetu role',
       },
-      default: 'customer',
+      default: 'USER',
       index: true,
     },
     profileImage: {
@@ -86,8 +96,24 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+    toJSON: {
+      virtuals: true,
+      transform: (doc, ret) => {
+        delete ret.password;
+        delete ret.passwordHash;
+        delete ret.__v;
+        return ret;
+      },
+    },
+    toObject: {
+      virtuals: true,
+      transform: (doc, ret) => {
+        delete ret.password;
+        delete ret.passwordHash;
+        delete ret.__v;
+        return ret;
+      },
+    },
   }
 );
 
@@ -98,6 +124,10 @@ userSchema.index({ 'address.city': 1, role: 1 });
 // Pre-save hook: Hash password before saving if modified
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
+    return next();
+  }
+  // Avoid re-hashing if it's already a valid bcrypt hash
+  if (typeof this.password === 'string' && (this.password.startsWith('$2a$') || this.password.startsWith('$2b$'))) {
     return next();
   }
   try {

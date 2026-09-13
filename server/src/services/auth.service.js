@@ -10,16 +10,19 @@ export class AuthService {
    * Generate JWT Token for an authenticated user
    */
   static generateToken(user) {
+    const role = user.role || 'USER';
+
     return jwt.sign(
       {
-        id: user._id || user.id,
-        role: user.role,
+        id: user._id ? user._id.toString() : user.id,
+        role,
         name: user.name,
         phone: user.phone,
+        email: user.email,
       },
       config.jwt.secret,
       {
-        expiresIn: config.jwt.expiresIn,
+        expiresIn: config.jwt.expiresIn || '7d',
       }
     );
   }
@@ -27,50 +30,56 @@ export class AuthService {
   /**
    * Register a new user with hashed password
    */
-  static async register({ name, phone, email, password, role = 'user' }) {
-    // Validate role is one of the 4 supported roles
-    const validRoles = ['user', 'worker', 'cooperative', 'admin'];
-    if (!validRoles.includes(role)) {
-      throw new AppError(`Invalid role "${role}". Allowed roles: ${validRoles.join(', ')}`, 400);
+  static async register({ name, phone, email, password, role = 'USER' }) {
+    // Normalize role
+    const rawRole = (role || 'USER').toUpperCase();
+    const normalizedRole = rawRole === 'CUSTOMER' ? 'USER' : rawRole;
+    const validRoles = ['USER', 'COOPERATIVE', 'WORKER', 'ADMIN'];
+
+    if (!validRoles.includes(normalizedRole)) {
+      throw new AppError(
+        `Invalid role "${role}". Allowed roles: ${validRoles.join(', ')}`,
+        400
+      );
     }
 
     if (mongoose.connection.readyState === 1) {
       // Check existing phone
-      const existingPhone = await User.findOne({ phone });
+      const existingPhone = await User.findOne({ phone: phone.trim() });
       if (existingPhone) {
         throw new AppError('A user with this phone number is already registered', 409);
       }
 
       // Check existing email if provided
-      if (email) {
-        const existingEmail = await User.findOne({ email });
+      if (email && email.trim()) {
+        const existingEmail = await User.findOne({ email: email.trim().toLowerCase() });
         if (existingEmail) {
           throw new AppError('A user with this email address is already registered', 409);
         }
       }
 
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(password, salt);
-
-      // Create user record
+      // Create user record (pre-save hook hashes password)
       const user = await User.create({
-        name,
-        phone,
-        email,
-        passwordHash,
-        role,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email ? email.trim().toLowerCase() : undefined,
+        password,
+        role: normalizedRole,
       });
 
       const token = this.generateToken(user);
+
       return {
         user: {
           id: user._id,
           name: user.name,
           phone: user.phone,
-          email: user.email,
+          email: user.email || null,
           role: user.role,
           isVerified: user.isVerified,
+          profileImage: user.profileImage || null,
+          isActive: user.isActive,
+          createdAt: user.createdAt,
         },
         token,
       };
@@ -80,11 +89,13 @@ export class AuthService {
       const mockUser = {
         id: mockId,
         _id: mockId,
-        name,
-        phone,
-        email,
-        role,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email ? email.trim().toLowerCase() : null,
+        role: normalizedRole,
         isVerified: false,
+        profileImage: null,
+        isActive: true,
       };
       const token = this.generateToken(mockUser);
       return { user: mockUser, token };
@@ -99,11 +110,16 @@ export class AuthService {
       throw new AppError('Please provide both phone/email and password', 400);
     }
 
+    const cleanIdentifier = identifier.trim();
+
     if (mongoose.connection.readyState === 1) {
-      // Search by phone or email
+      // Search by phone or lowercase email
       const user = await User.findOne({
-        $or: [{ phone: identifier }, { email: identifier }],
-      }).select('+passwordHash');
+        $or: [
+          { phone: cleanIdentifier },
+          { email: cleanIdentifier.toLowerCase() },
+        ],
+      }).select('+password');
 
       if (!user) {
         throw new AppError('Invalid credentials', 401);
@@ -125,9 +141,11 @@ export class AuthService {
           id: user._id,
           name: user.name,
           phone: user.phone,
-          email: user.email,
+          email: user.email || null,
           role: user.role,
           isVerified: user.isVerified,
+          profileImage: user.profileImage || null,
+          isActive: user.isActive,
         },
         token,
       };
@@ -136,13 +154,34 @@ export class AuthService {
       const mockUser = {
         id: new mongoose.Types.ObjectId(),
         name: 'Demo Authenticated User',
-        phone: identifier,
-        role: 'user',
+        phone: cleanIdentifier,
+        email: cleanIdentifier.includes('@') ? cleanIdentifier : null,
+        role: 'USER',
         isVerified: true,
+        isActive: true,
       };
       const token = this.generateToken(mockUser);
       return { user: mockUser, token };
     }
   }
-}
 
+  /**
+   * Get current user profile by user id
+   */
+  static async getMe(userId) {
+    if (mongoose.connection.readyState === 1) {
+      const user = await User.findById(userId).select('-password -passwordHash');
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+      return user;
+    }
+    return {
+      id: userId,
+      name: 'Authenticated User',
+      role: 'USER',
+      isVerified: true,
+      isActive: true,
+    };
+  }
+}

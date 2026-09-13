@@ -19,7 +19,8 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 3. API Version 1 Mount
+// 3. API Router Mount (/api and /api/v1)
+app.use('/api', apiRouter);
 app.use('/api/v1', apiRouter);
 
 // 4. Root welcome / health endpoint

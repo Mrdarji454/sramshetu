@@ -28,7 +28,7 @@ async function runTests() {
   });
 
   assert(user.name === 'Rajeshwar Shinde', 'User name is set correctly');
-  assert(user.role === 'customer', 'Default role is customer');
+  assert(user.role === 'customer' || user.role === 'USER', 'Default role is customer/USER');
   assert(user.isActive === true, 'Default isActive is true');
   assert(user.isVerified === false, 'Default isVerified is false');
   assert(user.avatar === 'https://cloudinary.com/avatar.jpg', 'User avatar alias works for profileImage');
