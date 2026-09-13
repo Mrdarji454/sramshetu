@@ -2,86 +2,211 @@ import mongoose from 'mongoose';
 
 const bookingSchema = new mongoose.Schema(
   {
-    customerId: {
+    customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: [true, 'Customer reference is required'],
+      index: true,
+      alias: 'customerId',
     },
-    workerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
-    cooperativeId: {
+    cooperative: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Cooperative',
+      required: false,
       default: null,
+      index: true,
+      alias: 'cooperativeId',
+    },
+    worker: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User', // or 'Worker' depending on dispatch flow, keeping User ref compatible
+      default: null,
+      index: true,
+      alias: 'workerId',
+    },
+    service: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Service',
+      default: null,
+      index: true,
+      alias: 'serviceId',
     },
     serviceName: {
       type: String,
-      required: true,
+      required: [true, 'Service name is required'],
       trim: true,
     },
     trade: {
       type: String,
-      required: true,
+      required: [true, 'Trade classification is required'],
       trim: true,
+      index: true,
     },
-    serviceAddress: {
-      street: String,
-      city: String,
-      state: String,
-      pincode: String,
-      landmark: String,
+    location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        default: [0, 0],
+      },
+      serviceAddress: {
+        street: { type: String, trim: true },
+        city: { type: String, trim: true, index: true },
+        state: { type: String, trim: true },
+        pincode: { type: String, trim: true, index: true },
+        landmark: { type: String, trim: true },
+      },
     },
-    scheduledDate: {
-      type: Date,
-      required: true,
-    },
-    floorRateAmount: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    escrowAmount: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    escrowStatus: {
-      type: String,
-      enum: ['pending', 'held', 'released', 'refunded', 'disputed'],
-      default: 'pending',
+    scheduledTime: {
+      start: {
+        type: Date,
+        required: [true, 'Scheduled start date/time is required'],
+        index: true,
+      },
+      end: {
+        type: Date,
+        default: null,
+      },
     },
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'assigned', 'in_progress', 'completed', 'cancelled'],
+      enum: {
+        values: [
+          'pending',
+          'confirmed',
+          'assigned',
+          'in_progress',
+          'completed',
+          'cancelled',
+          'disputed',
+        ],
+        message: '{VALUE} is not a valid booking status',
+      },
       default: 'pending',
+      index: true,
     },
-    otpCode: {
+    price: {
+      floorRateAmount: {
+        type: Number,
+        required: [true, 'Floor rate amount is required'],
+        min: 0,
+      },
+      totalAmount: {
+        type: Number,
+        required: [true, 'Total price amount is required'],
+        min: 0,
+      },
+      commissionCut: {
+        type: Number,
+        default: 0, // 0% platform middleman cut
+        min: 0,
+      },
+      currency: {
+        type: String,
+        default: 'INR',
+      },
+    },
+    paymentStatus: {
       type: String,
-      default: null,
+      enum: {
+        values: [
+          'pending',
+          'held',
+          'escrow_locked',
+          'released',
+          'refunded',
+          'failed',
+          'disputed',
+        ],
+        message: '{VALUE} is not a valid payment status',
+      },
+      default: 'pending',
+      index: true,
+      alias: 'escrowStatus',
     },
-    qrToken: {
+    qrVerification: {
+      token: { type: String, default: null },
+      otpCode: { type: String, default: null },
+      isVerified: { type: Boolean, default: false },
+      verifiedAt: { type: Date, default: null },
+    },
+    specialInstructions: {
       type: String,
-      default: null,
+      trim: true,
+      default: '',
     },
-    customerRating: {
-      type: Number,
-      min: 1,
-      max: 5,
-      default: null,
+    cancellation: {
+      cancelledBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      reason: String,
+      cancelledAt: Date,
     },
-    customerFeedback: {
-      type: String,
-      default: null,
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
-    specialInstructions: String,
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
-export const Booking = mongoose.model('Booking', bookingSchema);
+// High-speed compound and geospatial indexes
+bookingSchema.index({ 'location.coordinates': '2dsphere' });
+bookingSchema.index({ customer: 1, status: 1 });
+bookingSchema.index({ worker: 1, status: 1 });
+bookingSchema.index({ cooperative: 1, status: 1 });
+bookingSchema.index({ status: 1, 'scheduledTime.start': 1 });
+bookingSchema.index({ 'location.serviceAddress.city': 1, trade: 1, status: 1 });
 
+// Backward compatibility virtuals
+bookingSchema.virtual('scheduledDate')
+  .get(function () { return this.scheduledTime?.start; })
+  .set(function (v) {
+    if (!this.scheduledTime) this.scheduledTime = {};
+    this.scheduledTime.start = v;
+  });
+
+bookingSchema.virtual('floorRateAmount')
+  .get(function () { return this.price?.floorRateAmount; })
+  .set(function (v) {
+    if (!this.price) this.price = {};
+    this.price.floorRateAmount = v;
+  });
+
+bookingSchema.virtual('escrowAmount')
+  .get(function () { return this.price?.totalAmount; })
+  .set(function (v) {
+    if (!this.price) this.price = {};
+    this.price.totalAmount = v;
+  });
+
+bookingSchema.virtual('otpCode')
+  .get(function () { return this.qrVerification?.otpCode; })
+  .set(function (v) {
+    if (!this.qrVerification) this.qrVerification = {};
+    this.qrVerification.otpCode = v;
+  });
+
+bookingSchema.virtual('qrToken')
+  .get(function () { return this.qrVerification?.token; })
+  .set(function (v) {
+    if (!this.qrVerification) this.qrVerification = {};
+    this.qrVerification.token = v;
+  });
+
+bookingSchema.virtual('serviceAddress')
+  .get(function () { return this.location?.serviceAddress; })
+  .set(function (v) {
+    if (!this.location) this.location = {};
+    this.location.serviceAddress = v;
+  });
+
+export const Booking = mongoose.model('Booking', bookingSchema);
