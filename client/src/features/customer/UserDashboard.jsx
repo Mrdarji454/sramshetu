@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { bookingService } from '../../services/booking.service';
 import { BookingWizardModal } from '../bookings/BookingWizardModal';
 import { BookingStatusTracker } from '../bookings/BookingStatusTracker';
+import { WorkerMatcher } from '../matching/WorkerMatcher';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -19,14 +20,18 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
-  X
+  X,
+  Compass,
+  Layers,
 } from 'lucide-react';
 
 export function UserDashboard() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('match'); // 'match' | 'bookings'
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [initialBookingService, setInitialBookingService] = useState(null);
   const [selectedBookingForQr, setSelectedBookingForQr] = useState(null);
   const [expandedBookingId, setExpandedBookingId] = useState(null);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
@@ -76,6 +81,21 @@ export function UserDashboard() {
     setTimeout(() => setFeedbackMsg(null), 5000);
   };
 
+  const handleBookFromMatcher = (matchedItem) => {
+    setInitialBookingService({
+      name: matchedItem.worker?.primaryTrade || matchedItem.worker?.trade || 'Skilled Technical Service',
+      trade: matchedItem.worker?.primaryTrade || matchedItem.worker?.trade,
+      category: matchedItem.worker?.primaryTrade || matchedItem.worker?.trade,
+      preferredWorkerId: matchedItem.worker?.id || matchedItem.worker?._id,
+      preferredWorkerName: matchedItem.worker?.name,
+      preferredCooperativeId: matchedItem.cooperative?.id,
+      estimatedPrice: {
+        floorRate: matchedItem.worker?.rates?.hourlyRate || 450,
+      },
+    });
+    setBookingModalOpen(true);
+  };
+
   // Stats
   const activeCount = bookings.filter((b) => !['COMPLETED', 'CANCELLED'].includes((b.status || '').toUpperCase())).length;
   const escrowHeld = bookings
@@ -86,7 +106,7 @@ export function UserDashboard() {
   return (
     <DashboardLayout
       title={`Welcome back, ${user?.name || 'Customer'}`}
-      subtitle="Manage your active service bookings, track live artisans, and review smart escrow payments."
+      subtitle="Discover verified artisans nearby on interactive maps and manage guaranteed-escrow service bookings."
       roleBadge="Customer Account"
     >
       {/* Feedback Toast */}
@@ -132,32 +152,77 @@ export function UserDashboard() {
         </Card>
       </div>
 
-      {/* Action Banner */}
-      <div className="rounded-2xl bg-brand-navy-900 text-white p-6 sm:p-8 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-md">
-        <div>
-          <Badge variant="saffron" size="sm" className="mb-2">Need Skilled Work Done?</Badge>
-          <h3 className="text-xl font-bold font-display">Book an Aadhaar & Skill India Certified Artisan</h3>
-          <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
-            Choose from 24+ trades with transparent floor wages, backing by registered worker cooperatives, and direct digital escrow.
-          </p>
-        </div>
-        <Button 
-          variant="primary" 
-          size="md" 
-          icon={PlusCircle}
-          onClick={() => setBookingModalOpen(true)}
+      {/* Main View Mode Navigation Tabs */}
+      <div className="flex items-center gap-2 mb-6 pb-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('match')}
+          className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+            activeTab === 'match'
+              ? 'bg-brand-navy-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
         >
-          Book a Service Now
-        </Button>
+          <Compass className="w-4 h-4 text-brand-saffron-500" />
+          <span>Nearby Artisans & Live Map</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('bookings')}
+          className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all ${
+            activeTab === 'bookings'
+              ? 'bg-brand-navy-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Calendar className="w-4 h-4 text-blue-600" />
+          <span>My Bookings & Escrow Tracker</span>
+          {activeCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-brand-saffron-500 text-white text-[10px] font-bold">
+              {activeCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Active & Historical Bookings */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Your Booking History & Live Tracker</h3>
-            <p className="text-xs text-slate-500">Track stage-by-stage progression from cooperative dispatch to final completion</p>
+      {/* TAB 1: Location-based Worker Matcher */}
+      {activeTab === 'match' && (
+        <div className="mb-8">
+          <WorkerMatcher onBookWorker={handleBookFromMatcher} />
+        </div>
+      )}
+
+      {/* TAB 2: Bookings Tracker */}
+      {activeTab === 'bookings' && (
+        <>
+          {/* Action Banner */}
+          <div className="rounded-2xl bg-brand-navy-900 text-white p-6 sm:p-8 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-md">
+            <div>
+              <Badge variant="saffron" size="sm" className="mb-2">Need Skilled Work Done?</Badge>
+              <h3 className="text-xl font-bold font-display">Book an Aadhaar & Skill India Certified Artisan</h3>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
+                Choose from 24+ trades with transparent floor wages, backing by registered worker cooperatives, and direct digital escrow.
+              </p>
+            </div>
+            <Button 
+              variant="primary" 
+              size="md" 
+              icon={PlusCircle}
+              onClick={() => {
+                setInitialBookingService(null);
+                setBookingModalOpen(true);
+              }}
+            >
+              Book a Service Now
+            </Button>
           </div>
+
+          {/* Active & Historical Bookings */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Your Booking History & Live Tracker</h3>
+                <p className="text-xs text-slate-500">Track stage-by-stage progression from cooperative dispatch to final completion</p>
+              </div>
 
           <div className="flex items-center gap-2">
             <Button
@@ -309,11 +374,17 @@ export function UserDashboard() {
           </div>
         )}
       </div>
+    </>
+  )}
 
       {/* Booking Wizard Modal */}
       <BookingWizardModal
         isOpen={bookingModalOpen}
-        onClose={() => setBookingModalOpen(false)}
+        initialService={initialBookingService}
+        onClose={() => {
+          setBookingModalOpen(false);
+          setInitialBookingService(null);
+        }}
         onBookingCreated={handleBookingCreated}
       />
 

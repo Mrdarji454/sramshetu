@@ -35,6 +35,13 @@ inMemoryWorkers.set(defaultWorkerId, {
     hourlyRate: 450,
     currency: 'INR',
   },
+  latitude: 18.5074,
+  longitude: 73.8058,
+  serviceArea: {
+    radiusKm: 15,
+    city: 'Pune',
+    pincodes: ['411038', '411004', '411052'],
+  },
   location: {
     address: {
       street: 'Flat 402, Green Meadows, Kothrud',
@@ -43,6 +50,8 @@ inMemoryWorkers.set(defaultWorkerId, {
       pincode: '411038',
     },
     workingRadiusKm: 15,
+    latitude: 18.5074,
+    longitude: 73.8058,
     coordinates: [73.8058, 18.5074],
   },
   availability: {
@@ -66,6 +75,211 @@ inMemoryWorkers.set(defaultWorkerId, {
   cooperativeId: '65f123456789012345678903',
   jobsCompleted: 462,
 });
+
+// Seed additional diverse artisans across Pune localities for location-based matching
+const additionalSeedWorkers = [
+  {
+    id: '65f123456789012345678905',
+    _id: '65f123456789012345678905',
+    user: '65f123456789012345678905',
+    name: 'Santosh Waghmare',
+    phone: '+919820111223',
+    trade: 'Commercial Water Sanitation & Plumbing',
+    experience: {
+      years: 6,
+      primaryTrade: 'Plumbing & Water Sanitation',
+      subTrades: ['CPVC Concealed Piping', 'Hydro-Pneumatic Pumps', 'Drain Jetting'],
+      bio: 'Certified master plumber specializing in high-pressure water mains and bathroom renovation.',
+    },
+    skills: [
+      { name: 'CPVC Piping', category: 'Plumbing', nsdcLevel: 'Level 3', isPrimary: true },
+      { name: 'Pump Overhaul', category: 'Plumbing', nsdcLevel: 'Level 4', isPrimary: false },
+      { name: 'Drain Jetting', category: 'Sanitation', nsdcLevel: 'Level 3', isPrimary: false },
+    ],
+    rates: { dailyFloorRate: 1150, hourlyRate: 400, currency: 'INR' },
+    latitude: 18.5314,
+    longitude: 73.8446,
+    serviceArea: { radiusKm: 18, city: 'Pune' },
+    location: {
+      address: { street: 'B-12 Swapna Shilp, Shivajinagar', city: 'Pune', state: 'Maharashtra', pincode: '411005' },
+      workingRadiusKm: 18,
+      latitude: 18.5314,
+      longitude: 73.8446,
+      coordinates: [73.8446, 18.5314],
+    },
+    availability: {
+      status: 'available',
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      hours: { start: '08:30', end: '19:00' },
+    },
+    verificationStatus: { status: 'verified', aadhaarVerified: true, nsdcCertified: true },
+    rating: { average: 4.88, count: 61 },
+    cooperative: 'Pune Shramik Vikas Sahakari',
+    cooperativeId: '65f123456789012345678903',
+    jobsCompleted: 310,
+  },
+  {
+    id: '65f123456789012345678906',
+    _id: '65f123456789012345678906',
+    user: '65f123456789012345678906',
+    name: 'Dattatray Pawar',
+    phone: '+919820155667',
+    trade: 'Modular Woodwork & Artisan Carpentry',
+    experience: {
+      years: 7,
+      primaryTrade: 'Carpentry & Woodwork',
+      subTrades: ['Modular Kitchen Fitting', 'Teakwood Restoration', 'Acoustic Paneling'],
+      bio: 'Heritage and contemporary woodwork craftsman with extensive experience in commercial cabinetry.',
+    },
+    skills: [
+      { name: 'Modular Kitchens', category: 'Carpentry', nsdcLevel: 'Level 4', isPrimary: true },
+      { name: 'Furniture Restoration', category: 'Carpentry', nsdcLevel: 'Level 3', isPrimary: false },
+      { name: 'Lock & Hinge Hardware', category: 'Carpentry', nsdcLevel: 'Level 3', isPrimary: false },
+    ],
+    rates: { dailyFloorRate: 1200, hourlyRate: 480, currency: 'INR' },
+    latitude: 18.5167,
+    longitude: 73.8415,
+    serviceArea: { radiusKm: 15, city: 'Pune' },
+    location: {
+      address: { street: 'Prabhat Road, Deccan Gymkhana', city: 'Pune', state: 'Maharashtra', pincode: '411004' },
+      workingRadiusKm: 15,
+      latitude: 18.5167,
+      longitude: 73.8415,
+      coordinates: [73.8415, 18.5167],
+    },
+    availability: {
+      status: 'available',
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      hours: { start: '09:00', end: '18:00' },
+    },
+    verificationStatus: { status: 'verified', aadhaarVerified: true, nsdcCertified: true },
+    rating: { average: 4.91, count: 53 },
+    cooperative: 'Pune Shramik Vikas Sahakari',
+    cooperativeId: '65f123456789012345678903',
+    jobsCompleted: 198,
+  },
+  {
+    id: '65f123456789012345678907',
+    _id: '65f123456789012345678907',
+    user: '65f123456789012345678907',
+    name: 'Ganesh Shingate',
+    phone: '+919820188990',
+    trade: 'Civil Construction & Masonry',
+    experience: {
+      years: 9,
+      primaryTrade: 'Civil Construction & Masonry',
+      subTrades: ['Brick Masonry', 'Tile Laying', 'Waterproofing Plaster'],
+      bio: 'Master mason leading structural repair, tile finishing, and terrace waterproofing crews.',
+    },
+    skills: [
+      { name: 'Precision Tile Laying', category: 'Masonry', nsdcLevel: 'Level 4', isPrimary: true },
+      { name: 'Terrace Waterproofing', category: 'Masonry', nsdcLevel: 'Level 4', isPrimary: false },
+      { name: 'Plastering & Leveling', category: 'Masonry', nsdcLevel: 'Level 3', isPrimary: false },
+    ],
+    rates: { dailyFloorRate: 1400, hourlyRate: 550, currency: 'INR' },
+    latitude: 18.5018,
+    longitude: 73.8636,
+    serviceArea: { radiusKm: 20, city: 'Pune' },
+    location: {
+      address: { street: 'Near Swargate Bus Station', city: 'Pune', state: 'Maharashtra', pincode: '411042' },
+      workingRadiusKm: 20,
+      latitude: 18.5018,
+      longitude: 73.8636,
+      coordinates: [73.8636, 18.5018],
+    },
+    availability: {
+      status: 'available',
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      hours: { start: '08:00', end: '17:30' },
+    },
+    verificationStatus: { status: 'verified', aadhaarVerified: true, nsdcCertified: true },
+    rating: { average: 4.92, count: 95 },
+    cooperative: 'Maharashtra Karigar Mahasangh',
+    cooperativeId: '65f123456789012345678904',
+    jobsCompleted: 520,
+  },
+  {
+    id: '65f123456789012345678908',
+    _id: '65f123456789012345678908',
+    user: '65f123456789012345678908',
+    name: 'Kavita Sonawane',
+    phone: '+919820177889',
+    trade: 'Professional Painting & Surface Coating',
+    experience: {
+      years: 5,
+      primaryTrade: 'Professional Painting',
+      subTrades: ['Airless Spraying', 'Texture Wall Finishing', 'Epoxy Floor Coating'],
+      bio: 'Certified surface technician and master painter for interior textures and exterior weather-proofing.',
+    },
+    skills: [
+      { name: 'Texture Wall Coating', category: 'Painting', nsdcLevel: 'Level 3', isPrimary: true },
+      { name: 'Airless Spray Painting', category: 'Painting', nsdcLevel: 'Level 4', isPrimary: false },
+    ],
+    rates: { dailyFloorRate: 1100, hourlyRate: 380, currency: 'INR' },
+    latitude: 18.5679,
+    longitude: 73.9143,
+    serviceArea: { radiusKm: 15, city: 'Pune' },
+    location: {
+      address: { street: 'Symbiosis Road, Viman Nagar', city: 'Pune', state: 'Maharashtra', pincode: '411014' },
+      workingRadiusKm: 15,
+      latitude: 18.5679,
+      longitude: 73.9143,
+      coordinates: [73.9143, 18.5679],
+    },
+    availability: {
+      status: 'available',
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      hours: { start: '08:00', end: '18:00' },
+    },
+    verificationStatus: { status: 'verified', aadhaarVerified: true, nsdcCertified: true },
+    rating: { average: 4.96, count: 47 },
+    cooperative: 'Pune Shramik Vikas Sahakari',
+    cooperativeId: '65f123456789012345678903',
+    jobsCompleted: 142,
+  },
+  {
+    id: '65f123456789012345678909',
+    _id: '65f123456789012345678909',
+    user: '65f123456789012345678909',
+    name: 'Mahesh Shinde',
+    phone: '+919820122334',
+    trade: 'Electrical & Power Systems',
+    experience: {
+      years: 5,
+      primaryTrade: 'Electrical & Power Systems',
+      subTrades: ['Commercial Inverter Tech', 'Submeter Wiring'],
+      bio: 'Appliance and 3-phase commercial wireman.',
+    },
+    skills: [
+      { name: 'Commercial Wiring', category: 'Electrical', nsdcLevel: 'Level 3', isPrimary: true },
+    ],
+    rates: { dailyFloorRate: 1100, hourlyRate: 400, currency: 'INR' },
+    latitude: 18.5089,
+    longitude: 73.9259,
+    serviceArea: { radiusKm: 12, city: 'Pune' },
+    location: {
+      address: { street: 'Magarpatta City, Hadapsar', city: 'Pune', state: 'Maharashtra', pincode: '411028' },
+      workingRadiusKm: 12,
+      latitude: 18.5089,
+      longitude: 73.9259,
+      coordinates: [73.9259, 18.5089],
+    },
+    availability: {
+      status: 'busy', // Offline / currently on job for availability testing
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      hours: { start: '08:00', end: '18:00' },
+    },
+    verificationStatus: { status: 'verified', aadhaarVerified: true, nsdcCertified: true },
+    rating: { average: 4.79, count: 38 },
+    cooperative: 'Pune Shramik Vikas Sahakari',
+    cooperativeId: '65f123456789012345678903',
+    jobsCompleted: 112,
+  },
+];
+
+for (const worker of additionalSeedWorkers) {
+  inMemoryWorkers.set(worker.id, worker);
+}
 
 export class WorkerService {
   /**
@@ -148,6 +362,10 @@ export class WorkerService {
     // Normalization
     const formattedSkills = skills.map((s) => (typeof s === 'string' ? { name: s, isPrimary: true } : s));
     const tradeName = primaryTrade || 'General Technical';
+    // Geolocation and Service Area
+    const lat = Number(onboardingData.latitude) || Number(address.latitude) || 18.5204;
+    const lng = Number(onboardingData.longitude) || Number(address.longitude) || 73.8567;
+    const radius = Number(onboardingData.serviceArea?.radiusKm) || Number(workingRadiusKm) || 15;
 
     const updatePayload = {
       user: cleanId,
@@ -164,16 +382,25 @@ export class WorkerService {
         hourlyRate: Number(hourlyRate) || 250,
         currency: 'INR',
       },
+      latitude: lat,
+      longitude: lng,
+      serviceArea: {
+        radiusKm: radius,
+        city: address.city || 'Pune',
+        pincodes: onboardingData.serviceArea?.pincodes || (address.pincode ? [address.pincode] : []),
+      },
       location: {
         type: 'Point',
-        coordinates: [73.8567, 18.5204],
+        coordinates: [lng, lat],
+        latitude: lat,
+        longitude: lng,
         address: {
           street: address.street || '',
           city: address.city || 'Pune',
           state: address.state || 'Maharashtra',
           pincode: address.pincode || '',
         },
-        workingRadiusKm: Number(workingRadiusKm) || 15,
+        workingRadiusKm: radius,
       },
       availability: {
         status: availability.status || 'available',

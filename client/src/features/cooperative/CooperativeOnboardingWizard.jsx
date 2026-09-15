@@ -24,6 +24,7 @@ import {
   FileSpreadsheet,
   Award,
 } from 'lucide-react';
+import { LOCALITY_PRESETS } from '../../utils/geo.utils';
 
 const COOP_STEPS = [
   { id: 'organization', title: 'Organization', icon: Building2, desc: 'Registration & Governance' },
@@ -61,6 +62,9 @@ export function CooperativeOnboardingWizard({ onComplete, initialTab }) {
     serviceCategories: ['Electrical & Power Systems', 'Plumbing & Water Sanitation', 'Carpentry & Woodwork'],
     address: 'Shramik Bhavan, 3rd Floor, FC Road, Shivajinagar',
     district: 'Pune',
+    latitude: 18.5204,
+    longitude: 73.8436,
+    coverageRadiusKm: 25,
     operationalPincodes: '411001, 411004, 411038, 411052',
     presidentName: 'Sanjay Tukaram Jadhav',
     secretaryName: 'Anjali Deshmukh',
@@ -539,6 +543,84 @@ export function CooperativeOnboardingWizard({ onComplete, initialTab }) {
                   placeholder="e.g. 411001, 411004, 411038, 411052"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono bg-slate-50/50"
                 />
+              </div>
+
+              {/* Coordinates and Coverage Area */}
+              <div className="sm:col-span-2 p-4 rounded-2xl bg-indigo-50/60 border border-indigo-200 text-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+                    Guild Headquarters Coordinates & Locality Presets
+                  </span>
+                  <span className="text-[10px] text-indigo-700">Used for jurisdiction and proximity routing</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Latitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={formData.latitude || 18.5204}
+                      onChange={(e) => setFormData({ ...formData, latitude: Number(e.target.value) })}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Longitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={formData.longitude || 73.8436}
+                      onChange={(e) => setFormData({ ...formData, longitude: Number(e.target.value) })}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-xs bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Locality Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-indigo-200/60">
+                  <span className="text-[10px] font-bold text-slate-500">Quick Headquarters Presets:</span>
+                  {LOCALITY_PRESETS.slice(0, 6).map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          latitude: p.latitude,
+                          longitude: p.longitude,
+                          district: p.city,
+                          address: `${p.name}, ${p.city}`,
+                        })
+                      }
+                      className="px-2 py-0.5 rounded-lg bg-white hover:bg-indigo-100 text-indigo-800 text-[10px] font-semibold border border-indigo-200 transition-colors"
+                    >
+                      {p.name.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Coverage Radius Slider */}
+              <div className="sm:col-span-2 p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                  Jurisdiction Operational Radius: <span className="text-indigo-700 font-extrabold">{formData.coverageRadiusKm || 25} km</span>
+                </label>
+                <input
+                  type="range"
+                  min="5"
+                  max="75"
+                  step="5"
+                  value={formData.coverageRadiusKm || 25}
+                  onChange={(e) => setFormData({ ...formData, coverageRadiusKm: Number(e.target.value) })}
+                  className="w-full accent-indigo-600"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-1">
+                  <span>5 km (City Center)</span>
+                  <span>25 km (Metropolitan)</span>
+                  <span>75 km (District Wide)</span>
+                </div>
               </div>
             </div>
           </div>

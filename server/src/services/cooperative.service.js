@@ -30,11 +30,21 @@ inMemoryCooperatives.set(defaultCoopId, {
     'Carpentry & Woodwork',
     'Masonry & Civil Works',
   ],
+  latitude: 18.5204,
+  longitude: 73.8436,
+  serviceArea: {
+    radiusKm: 25,
+    district: 'Pune',
+    pincodes: ['411001', '411004', '411038', '411052'],
+  },
   location: {
     address: 'Shramik Bhavan, 3rd Floor, FC Road, Shivajinagar',
     district: 'Pune',
     state: 'Maharashtra',
     operationalPincodes: ['411001', '411004', '411038', '411052'],
+    latitude: 18.5204,
+    longitude: 73.8436,
+    coordinates: [73.8436, 18.5204],
   },
   governance: {
     presidentName: 'Sanjay Tukaram Jadhav',
@@ -50,7 +60,7 @@ inMemoryCooperatives.set(defaultCoopId, {
       phone: '+91 98201 44019',
       trade: 'Electrical & Power Systems',
       dailyFloorRate: 1300,
-      status: 'busy',
+      status: 'available',
       rating: 4.94,
       jobsCompleted: 462,
       isVerified: true,
@@ -79,6 +89,18 @@ inMemoryCooperatives.set(defaultCoopId, {
       jobsCompleted: 198,
       isVerified: true,
     },
+    {
+      id: 'W-MH-7789',
+      _id: 'W-MH-7789',
+      name: 'Kavita Sonawane',
+      phone: '+91 98201 77889',
+      trade: 'Professional Painting',
+      dailyFloorRate: 1100,
+      status: 'available',
+      rating: 4.96,
+      jobsCompleted: 142,
+      isVerified: true,
+    },
   ],
   verificationStatus: 'verified',
   welfareFund: {
@@ -86,6 +108,71 @@ inMemoryCooperatives.set(defaultCoopId, {
     totalDisbursed: 4200000,
   },
   trustScore: 98.4,
+});
+
+// Seed second cooperative society in Kothrud
+const secondCoopId = '65f123456789012345678904';
+inMemoryCooperatives.set(secondCoopId, {
+  id: secondCoopId,
+  _id: secondCoopId,
+  userId: secondCoopId,
+  name: 'Maharashtra Karigar Mahasangh',
+  registrationDetails: {
+    registrationNumber: 'MH-PUN-COOP-2020-5519',
+    state: 'Maharashtra',
+    registeredYear: 2020,
+    registrarApproved: true,
+    authority: 'State Registrar of Cooperative Societies, Pune West',
+  },
+  description: 'Apex union for civil construction masons, heavy structural welders, and industrial coatings specialists.',
+  serviceCategories: [
+    'Civil Construction & Masonry',
+    'Professional Painting & Surface Coating',
+    'Structural Fabrication & Welding',
+    'Electrical & Power Systems',
+  ],
+  latitude: 18.5074,
+  longitude: 73.8077,
+  serviceArea: {
+    radiusKm: 22,
+    district: 'Pune',
+    pincodes: ['411038', '411029', '411041', '411058'],
+  },
+  location: {
+    address: 'Artisan Hub, Kothrud Industrial Estate, Paud Road',
+    district: 'Pune',
+    state: 'Maharashtra',
+    operationalPincodes: ['411038', '411029', '411041', '411058'],
+    latitude: 18.5074,
+    longitude: 73.8077,
+    coordinates: [73.8077, 18.5074],
+  },
+  governance: {
+    presidentName: 'Vinayak Rao Patil',
+    secretaryName: 'Rameshwar Ghodke',
+    contactEmail: 'karigar.mahasangh@shramsetu.gov.in',
+    contactPhone: '+91 98202 88888',
+  },
+  members: [
+    {
+      id: 'W-MH-8890',
+      _id: 'W-MH-8890',
+      name: 'Ganesh Shingate',
+      phone: '+91 98201 88990',
+      trade: 'Civil Construction & Masonry',
+      dailyFloorRate: 1400,
+      status: 'available',
+      rating: 4.92,
+      jobsCompleted: 520,
+      isVerified: true,
+    },
+  ],
+  verificationStatus: 'verified',
+  welfareFund: {
+    balance: 19500000,
+    totalDisbursed: 3100000,
+  },
+  trustScore: 96.8,
 });
 
 export class CooperativeService {
@@ -167,6 +254,14 @@ export class CooperativeService {
       certificateUrl = null,
     } = onboardingData;
 
+    // Geolocation and Service Area
+    const lat = Number(onboardingData.latitude) || 18.5204;
+    const lng = Number(onboardingData.longitude) || 73.8436;
+    const radius = Number(onboardingData.serviceArea?.radiusKm) || Number(onboardingData.coverageRadiusKm) || 25;
+    const pincodesList = Array.isArray(operationalPincodes)
+      ? operationalPincodes
+      : String(operationalPincodes || '').split(',').map((p) => p.trim()).filter(Boolean);
+
     const payload = {
       name: name || 'Cooperative Guild',
       registrationDetails: {
@@ -178,15 +273,22 @@ export class CooperativeService {
       },
       description,
       serviceCategories: Array.isArray(serviceCategories) ? serviceCategories : [serviceCategories],
+      latitude: lat,
+      longitude: lng,
+      serviceArea: {
+        radiusKm: radius,
+        district,
+        pincodes: pincodesList,
+      },
       location: {
         type: 'Point',
-        coordinates: [73.8567, 18.5204],
+        coordinates: [lng, lat],
+        latitude: lat,
+        longitude: lng,
         address,
         district,
         state,
-        operationalPincodes: Array.isArray(operationalPincodes)
-          ? operationalPincodes
-          : String(operationalPincodes).split(',').map((p) => p.trim()).filter(Boolean),
+        operationalPincodes: pincodesList,
       },
       governance: {
         presidentName,

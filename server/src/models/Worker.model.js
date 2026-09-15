@@ -53,7 +53,15 @@ const workerSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number], // [longitude, latitude]
-        default: [0, 0],
+        default: [73.8567, 18.5204],
+      },
+      latitude: {
+        type: Number,
+        default: 18.5204,
+      },
+      longitude: {
+        type: Number,
+        default: 73.8567,
       },
       address: {
         street: { type: String, trim: true },
@@ -66,6 +74,23 @@ const workerSchema = new mongoose.Schema(
         default: 15,
         min: 1,
       },
+    },
+    latitude: {
+      type: Number,
+      default: 18.5204,
+    },
+    longitude: {
+      type: Number,
+      default: 73.8567,
+    },
+    serviceArea: {
+      radiusKm: {
+        type: Number,
+        default: 15,
+        min: 1,
+      },
+      city: { type: String, trim: true, default: 'Pune' },
+      pincodes: [{ type: String, trim: true }],
     },
     availability: {
       status: {

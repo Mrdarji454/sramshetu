@@ -61,12 +61,37 @@ const cooperativeSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number], // [longitude, latitude]
-        default: [0, 0],
+        default: [73.8436, 18.5204],
+      },
+      latitude: {
+        type: Number,
+        default: 18.5204,
+      },
+      longitude: {
+        type: Number,
+        default: 73.8436,
       },
       address: { type: String, trim: true },
       district: { type: String, trim: true, index: true },
       state: { type: String, trim: true, index: true },
       operationalPincodes: [{ type: String, trim: true }],
+    },
+    latitude: {
+      type: Number,
+      default: 18.5204,
+    },
+    longitude: {
+      type: Number,
+      default: 73.8436,
+    },
+    serviceArea: {
+      radiusKm: {
+        type: Number,
+        default: 25,
+        min: 1,
+      },
+      district: { type: String, trim: true, default: 'Pune' },
+      pincodes: [{ type: String, trim: true }],
     },
     members: [
       {
