@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { SERVICE_CATEGORIES } from "../../data/mockData";
+import { BookingWizardModal } from "../bookings/BookingWizardModal";
 
 const iconMap = {
   Zap,
@@ -219,136 +220,13 @@ export function ServicesSection() {
         </div>
       </div>
 
-      {/* Booking Drawer / Modal Preview */}
+      {/* Complete ShramSetu Booking Wizard Modal */}
       {bookingModalService && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-navy-950/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative animate-in zoom-in-95 duration-150">
-            <button
-              onClick={() => setBookingModalService(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {bookingSuccess ? (
-              <div className="text-center py-8">
-                <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center mb-4">
-                  <CheckCircle2 className="w-8 h-8" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 font-display">
-                  Work Demand Broadcasted!
-                </h3>
-                <p className="text-sm text-slate-600 mt-2">
-                  XGBoost Fair Allocation engine is dispatching the nearest
-                  registered cooperative artisan for{" "}
-                  <strong className="text-slate-800">
-                    {bookingModalService.name}
-                  </strong>
-                  .
-                </p>
-                <Badge variant="verified" size="md" className="mt-4">
-                  Escrow Order #SS-2026-9924 Created
-                </Badge>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-brand-navy-50 text-brand-navy-900 flex items-center justify-center">
-                    <Wrench className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-brand-navy-900">
-                      {bookingModalService.name}
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      {bookingModalService.hindiName} • Cooperative Regulated
-                    </p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleConfirmMockBooking} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Your Full Name / Business
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      defaultValue="Aakash Sharma"
-                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Contact Phone
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        defaultValue="+91 98201 44520"
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Pincode
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        defaultValue="411038"
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Job Description
-                    </label>
-                    <textarea
-                      rows={2}
-                      defaultValue="Need urgent inspection for distribution board tripping and concealed line repair."
-                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                    <div className="flex justify-between text-slate-600">
-                      <span>Floor Rate Estimate</span>
-                      <span className="font-bold text-slate-900">
-                        {bookingModalService.floorRate}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>Platform Commission Cut</span>
-                      <span className="font-bold text-emerald-600">
-                        ₹0 (0% Fee)
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>Worker Welfare Pool Contribution</span>
-                      <span className="text-slate-700">
-                        Included in Guild Dues
-                      </span>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="md"
-                    className="w-full mt-2"
-                  >
-                    Confirm & Trigger AI Dispatch
-                  </Button>
-                </form>
-              </div>
-            )}
-          </div>
-        </div>
+        <BookingWizardModal
+          isOpen={Boolean(bookingModalService)}
+          onClose={() => setBookingModalService(null)}
+          initialService={bookingModalService}
+        />
       )}
     </section>
   );

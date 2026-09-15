@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js",
+    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js && node tests/booking-flow.test.js",
+    "test:booking": "node tests/booking-flow.test.js",
     "test:auth": "node tests/auth.test.js",
     "test:integration": "node tests/integration/e2e-auth-flow.test.js",
     "test:schemas": "node tests/schemas.test.js"
