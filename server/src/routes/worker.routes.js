@@ -7,15 +7,41 @@ import { validate } from '../middleware/validate.middleware.js';
 
 const router = Router();
 
-router.use(authenticate);
+// Protect all worker routes
+router.use(authenticate, authorizeRoles('worker', 'admin'));
 
 // GET /api/v1/workers/profile
-router.get('/profile', authorizeRoles('worker', 'admin'), workerController.getProfile);
+router.get('/profile', workerController.getProfile);
+
+// POST /api/v1/workers/onboarding & PUT /api/v1/workers/profile
+router.post(
+  '/onboarding',
+  [
+    body('primaryTrade').optional().trim(),
+    body('years').optional().isNumeric().withMessage('Years of experience must be a number'),
+    validate,
+  ],
+  workerController.saveOnboarding
+);
+router.put('/profile', workerController.saveOnboarding);
+
+// GET /api/v1/workers/verification-status
+router.get('/verification-status', workerController.getVerificationStatus);
+
+// POST /api/v1/workers/documents
+router.post(
+  '/documents',
+  [
+    body('docType').notEmpty().withMessage('Document type is required'),
+    body('url').notEmpty().withMessage('Document URL / Data is required'),
+    validate,
+  ],
+  workerController.uploadDocument
+);
 
 // PATCH /api/v1/workers/availability
 router.patch(
   '/availability',
-  authorizeRoles('worker', 'admin'),
   [
     body('status')
       .optional()
@@ -31,11 +57,6 @@ router.patch(
 );
 
 // GET /api/v1/workers/assigned-jobs
-router.get(
-  '/assigned-jobs',
-  authorizeRoles('worker', 'admin'),
-  workerController.getAssignedJobs
-);
+router.get('/assigned-jobs', workerController.getAssignedJobs);
 
 export default router;
-
