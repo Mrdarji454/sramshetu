@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useLocation, Outlet } from 'react-router-dom';
+import { Navigate, useLocation, Outlet, Link } from 'react-router-dom';
 import { useAuth, getRoleDashboardPath } from '../context/AuthContext';
 import { ShieldAlert, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
@@ -63,9 +63,9 @@ export function ProtectedRoute({ allowedRoles, children }) {
 
             <div className="mt-6 flex flex-col gap-2">
               <NavigateToOwnDashboard userRole={user.role} />
-              <a href="/" className="text-xs text-slate-500 hover:text-slate-800 font-medium py-2">
+              <Link to="/" className="text-xs text-slate-500 hover:text-slate-800 font-medium py-2">
                 Return to ShramSetu Home
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -79,11 +79,11 @@ export function ProtectedRoute({ allowedRoles, children }) {
 function NavigateToOwnDashboard({ userRole }) {
   const ownPath = getRoleDashboardPath(userRole);
   return (
-    <a href={ownPath} className="w-full">
+    <Link to={ownPath} className="w-full">
       <Button variant="primary" size="md" className="w-full" icon={ArrowLeft}>
         Go to My Role Dashboard
       </Button>
-    </a>
+    </Link>
   );
 }
 

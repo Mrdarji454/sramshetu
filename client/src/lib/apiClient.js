@@ -53,15 +53,23 @@ apiClient.interceptors.response.use(
     }
 
     // 2. Normalize server error message
-    const message =
-      error.response?.data?.message ||
-      error.response?.data?.errors?.[0]?.message ||
-      error.message ||
-      'An unexpected network error occurred';
+    const backendData = error.response?.data;
+    let message = backendData?.message;
+    if (!message && Array.isArray(backendData?.errors) && backendData.errors.length > 0) {
+      const firstErr = backendData.errors[0];
+      message = typeof firstErr === 'string' ? firstErr : firstErr?.msg || firstErr?.message;
+    }
+    if (!message) {
+      message = error.message || 'An unexpected network error occurred';
+    }
 
     const normalizedError = new Error(message);
     normalizedError.status = error.response?.status || 500;
-    normalizedError.data = error.response?.data || null;
+    normalizedError.statusCode = error.response?.status || 500;
+    normalizedError.data = backendData || null;
+    normalizedError.errors = backendData?.errors || null;
+    normalizedError.isSessionExpired = error.response?.status === 401;
+    normalizedError.isForbidden = error.response?.status === 403;
 
     return Promise.reject(normalizedError);
   }

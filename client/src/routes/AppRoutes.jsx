@@ -4,6 +4,7 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { LandingPage } from '../features/landing/LandingPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { RegisterPage } from '../features/auth/RegisterPage';
+import { UnauthorizedPage } from '../features/auth/UnauthorizedPage';
 import { UserDashboard } from '../features/customer/UserDashboard';
 import { CooperativeDashboard } from '../features/cooperative/CooperativeDashboard';
 import { WorkerDashboard } from '../features/worker/WorkerDashboard';
@@ -16,6 +17,7 @@ export function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
       {/* Role Protected Routes */}
       {/* 1. USER -> /user/dashboard */}

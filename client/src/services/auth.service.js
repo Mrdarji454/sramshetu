@@ -11,7 +11,7 @@ export const authService = {
    */
   async register(userData) {
     const response = await apiClient.post('/auth/register', userData);
-    return response.data;
+    return response.data || response;
   },
 
   /**
@@ -21,7 +21,7 @@ export const authService = {
    */
   async login(credentials) {
     const response = await apiClient.post('/auth/login', credentials);
-    return response.data;
+    return response.data || response;
   },
 
   /**
@@ -42,8 +42,13 @@ export const authService = {
    */
   async getCurrentUser() {
     const response = await apiClient.get('/auth/me');
-    return response.data?.user || response.data;
+    return response.data?.user || response.user || response.data || response;
   },
 };
+
+export const register = authService.register.bind(authService);
+export const login = authService.login.bind(authService);
+export const logout = authService.logout.bind(authService);
+export const getCurrentUser = authService.getCurrentUser.bind(authService);
 
 export default authService;
