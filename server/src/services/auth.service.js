@@ -5,6 +5,8 @@ import { config } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import mongoose from 'mongoose';
 
+const inMemoryUsers = new Map();
+
 export class AuthService {
   /**
    * Generate JWT Token for an authenticated user
@@ -84,21 +86,29 @@ export class AuthService {
         token,
       };
     } else {
-      // Mocked response when DB is not connected
-      const mockId = new mongoose.Types.ObjectId();
+      // In-memory fallback when MongoDB is not connected (e.g. dev/test mode)
+      const mockId = new mongoose.Types.ObjectId().toString();
       const mockUser = {
         id: mockId,
         _id: mockId,
         name: name.trim(),
         phone: phone.trim(),
         email: email ? email.trim().toLowerCase() : null,
+        password,
         role: normalizedRole,
         isVerified: false,
         profileImage: null,
         isActive: true,
       };
+
+      inMemoryUsers.set(mockId, mockUser);
+      inMemoryUsers.set(mockUser.phone, mockUser);
+      if (mockUser.email) inMemoryUsers.set(mockUser.email, mockUser);
+
+      const safeUser = { ...mockUser };
+      delete safeUser.password;
       const token = this.generateToken(mockUser);
-      return { user: mockUser, token };
+      return { user: safeUser, token };
     }
   }
 
@@ -150,9 +160,32 @@ export class AuthService {
         token,
       };
     } else {
-      // Mocked response for test / dev environment
+      // In-memory fallback for test / dev environment
+      const existing =
+        inMemoryUsers.get(cleanIdentifier) ||
+        inMemoryUsers.get(cleanIdentifier.toLowerCase());
+
+      if (existing) {
+        if (existing.password && existing.password !== password) {
+          const match =
+            existing.password === password ||
+            (await bcrypt.compare(password, existing.password).catch(() => false));
+          if (!match) {
+            throw new AppError('Invalid credentials', 401);
+          }
+        }
+
+        const safeUser = { ...existing };
+        delete safeUser.password;
+        const token = this.generateToken(existing);
+        return { user: safeUser, token };
+      }
+
+      // Default mock user if not registered
+      const mockId = new mongoose.Types.ObjectId().toString();
       const mockUser = {
-        id: new mongoose.Types.ObjectId(),
+        id: mockId,
+        _id: mockId,
         name: 'Demo Authenticated User',
         phone: cleanIdentifier,
         email: cleanIdentifier.includes('@') ? cleanIdentifier : null,
@@ -176,6 +209,14 @@ export class AuthService {
       }
       return user;
     }
+
+    const existing = inMemoryUsers.get(userId) || inMemoryUsers.get(String(userId));
+    if (existing) {
+      const safeUser = { ...existing };
+      delete safeUser.password;
+      return safeUser;
+    }
+
     return {
       id: userId,
       name: 'Authenticated User',
