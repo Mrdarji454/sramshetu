@@ -4,6 +4,8 @@ import userRoutes from './user.routes.js';
 import workerRoutes from './worker.routes.js';
 import cooperativeRoutes from './cooperative.routes.js';
 import adminRoutes from './admin.routes.js';
+import serviceRoutes from './service.routes.js';
+import bookingRoutes from './booking.routes.js';
 
 const apiRouter = Router();
 
@@ -23,6 +25,8 @@ apiRouter.use('/users', userRoutes);
 apiRouter.use('/workers', workerRoutes);
 apiRouter.use('/cooperatives', cooperativeRoutes);
 apiRouter.use('/admin', adminRoutes);
+apiRouter.use('/services', serviceRoutes);
+apiRouter.use('/bookings', bookingRoutes);
 
 export default apiRouter;
 

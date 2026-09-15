@@ -1,5 +1,6 @@
 import { User } from '../models/User.model.js';
 import { Booking } from '../models/Booking.model.js';
+import { BookingService } from './booking.service.js';
 import { AppError } from '../utils/AppError.js';
 import mongoose from 'mongoose';
 
@@ -23,18 +24,10 @@ export class UserService {
   }
 
   static async getBookings(userId) {
-    if (mongoose.connection.readyState === 1) {
-      return Booking.find({ customerId: userId }).sort({ createdAt: -1 });
-    }
-    return [
-      {
-        id: 'BK-2026-8801',
-        serviceName: 'Emergency Concealed Wiring Repair',
-        status: 'in_progress',
-        escrowAmount: 900,
-        escrowStatus: 'held',
-      },
-    ];
+    return BookingService.getBookings({
+      userId,
+      role: 'USER',
+    });
   }
 }
 

@@ -2,6 +2,7 @@ import { Cooperative } from '../models/Cooperative.model.js';
 import { Worker, WorkerProfile } from '../models/WorkerProfile.model.js';
 import { User } from '../models/User.model.js';
 import { Booking } from '../models/Booking.model.js';
+import { BookingService } from './booking.service.js';
 import { AppError } from '../utils/AppError.js';
 import mongoose from 'mongoose';
 
@@ -347,37 +348,17 @@ export class CooperativeService {
    * Get incoming booking requests
    */
   static async getIncomingRequests(cooperativeId) {
-    if (mongoose.connection.readyState === 1) {
-      return Booking.find({ cooperativeId, status: 'pending' });
-    }
-    return [
-      {
-        id: 'REQ-MH-9901',
-        customerName: 'Priya Sharma',
-        service: 'Commercial 3-Phase Transformer Maintenance',
-        budgetFloor: '₹1,800',
-        urgency: 'Immediate',
-        status: 'pending',
-      },
-    ];
+    return BookingService.getBookings({
+      userId: cooperativeId,
+      cooperativeId,
+      role: 'COOPERATIVE',
+    });
   }
 
   /**
    * Assign worker to booking
    */
-  static async assignWorker(bookingId, workerId) {
-    if (mongoose.connection.readyState === 1) {
-      return Booking.findByIdAndUpdate(
-        bookingId,
-        { workerId, status: 'assigned' },
-        { new: true }
-      );
-    }
-    return {
-      bookingId,
-      workerId,
-      status: 'assigned',
-      assignedAt: new Date().toISOString(),
-    };
+  static async assignWorker(bookingId, workerId, cooperativeUserId = null) {
+    return BookingService.assignWorker(bookingId, workerId, cooperativeUserId || defaultCoopId, 'COOPERATIVE');
   }
 }
