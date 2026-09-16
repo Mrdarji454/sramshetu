@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 /**
  * Custom Leaflet Map for Location-Based Worker Matching
@@ -16,7 +16,7 @@ export function WorkerMatchingMap({
   onSelectCooperative,
   onBookWorker,
   searchRadiusKm = 25,
-  className = 'h-[500px] w-full rounded-2xl overflow-hidden shadow-inner border border-slate-200',
+  className = "h-[500px] w-full rounded-2xl overflow-hidden shadow-inner border border-slate-200",
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -39,7 +39,7 @@ export function WorkerMatchingMap({
     });
 
     // Add high-resolution OpenStreetMap tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors • ShramSetu GeoEngine',
       maxZoom: 19,
@@ -72,16 +72,16 @@ export function WorkerMatchingMap({
     // 1. Search Radius Circle around Customer
     circleRef.current = L.circle([custLat, custLng], {
       radius: (searchRadiusKm || 25) * 1000,
-      color: '#3B82F6',
-      fillColor: '#60A5FA',
+      color: "#3B82F6",
+      fillColor: "#60A5FA",
       fillOpacity: 0.08,
       weight: 1.5,
-      dashArray: '5, 5',
+      dashArray: "5, 5",
     }).addTo(map);
 
     // 2. Customer Location Pin (Radar Pulse Icon)
     const customerIcon = L.divIcon({
-      className: 'custom-customer-marker',
+      className: "custom-customer-marker",
       html: `
         <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
           <div style="position: absolute; width: 32px; height: 32px; background: rgba(37, 99, 235, 0.3); border-radius: 50%; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
@@ -103,7 +103,7 @@ export function WorkerMatchingMap({
         `<div style="font-family: inherit; font-size: 12px; padding: 4px;">
           <strong style="color: #1E293B; display: block; margin-bottom: 2px;">Your Service Address</strong>
           <span style="color: #64748B;">Radius: ${searchRadiusKm} km coverage</span>
-        </div>`
+        </div>`,
       );
     markersRef.current.push(customerMarker);
 
@@ -113,14 +113,14 @@ export function WorkerMatchingMap({
       const coopLng = coop.coordinates?.longitude || coop.longitude || 73.8436;
 
       const coopIcon = L.divIcon({
-        className: 'custom-coop-marker',
+        className: "custom-coop-marker",
         html: `
           <div style="position: relative; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
             <div style="width: 32px; height: 32px; background: #4F46E5; border: 2.5px solid #FFFFFF; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; transform: rotate(45deg);">
               <div style="transform: rotate(-45deg); color: #FFFFFF; font-size: 14px; font-weight: 800;">🏛️</div>
             </div>
             <div style="position: absolute; top: -6px; right: -6px; background: #10B981; color: white; font-size: 9px; font-weight: bold; padding: 1px 4px; border-radius: 10px; border: 1px solid white;">
-              ${coop.trustScore ? `${Math.round(coop.trustScore)}%` : 'Gov'}
+              ${coop.trustScore ? `${Math.round(coop.trustScore)}%` : "Gov"}
             </div>
           </div>
         `,
@@ -128,23 +128,25 @@ export function WorkerMatchingMap({
         iconAnchor: [19, 19],
       });
 
-      const coopMarker = L.marker([coopLat, coopLng], { icon: coopIcon }).addTo(map);
+      const coopMarker = L.marker([coopLat, coopLng], { icon: coopIcon }).addTo(
+        map,
+      );
 
       const coopPopupHtml = `
         <div style="font-family: inherit; font-size: 12px; min-width: 180px; padding: 4px;">
           <div style="color: #4F46E5; font-size: 10px; font-weight: 700; text-transform: uppercase;">Registered Cooperative</div>
           <strong style="color: #0F172A; font-size: 13px; display: block; margin: 2px 0 4px 0;">${coop.name}</strong>
           <div style="color: #64748B; font-size: 11px;">
-            Distance: <strong>${coop.distanceFormatted || 'Nearby'}</strong> • Trust: <strong style="color: #059669;">${coop.trustScore || 96}%</strong>
+            Distance: <strong>${coop.distanceFormatted || "Nearby"}</strong> • Trust: <strong style="color: #059669;">${coop.trustScore || 96}%</strong>
           </div>
           <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #E2E8F0; font-size: 10px; color: #475569;">
-            ${coop.district || 'Pune'}, ${coop.state || 'Maharashtra'}
+            ${coop.district || "Pune"}, ${coop.state || "Maharashtra"}
           </div>
         </div>
       `;
 
       coopMarker.bindPopup(coopPopupHtml);
-      coopMarker.on('click', () => {
+      coopMarker.on("click", () => {
         if (onSelectCooperative) onSelectCooperative(coop.id || coop._id);
       });
 
@@ -159,28 +161,32 @@ export function WorkerMatchingMap({
       const isSelected = selectedWorkerId === (worker.id || worker._id);
 
       // Icon color based on trade
-      const tradeStr = (worker.primaryTrade || worker.trade || '').toLowerCase();
-      let badgeEmoji = '⚡';
-      let themeColor = '#D97706'; // saffron default
-      if (tradeStr.includes('plumb')) {
-        badgeEmoji = '💧';
-        themeColor = '#0284C7';
-      } else if (tradeStr.includes('carpent')) {
-        badgeEmoji = '🪚';
-        themeColor = '#B45309';
-      } else if (tradeStr.includes('mason') || tradeStr.includes('construct')) {
-        badgeEmoji = '🧱';
-        themeColor = '#475569';
-      } else if (tradeStr.includes('paint')) {
-        badgeEmoji = '🎨';
-        themeColor = '#7C3AED';
+      const tradeStr = (
+        worker.primaryTrade ||
+        worker.trade ||
+        ""
+      ).toLowerCase();
+      let badgeEmoji = "⚡";
+      let themeColor = "#D97706"; // saffron default
+      if (tradeStr.includes("plumb")) {
+        badgeEmoji = "💧";
+        themeColor = "#0284C7";
+      } else if (tradeStr.includes("carpent")) {
+        badgeEmoji = "🪚";
+        themeColor = "#B45309";
+      } else if (tradeStr.includes("mason") || tradeStr.includes("construct")) {
+        badgeEmoji = "🧱";
+        themeColor = "#475569";
+      } else if (tradeStr.includes("paint")) {
+        badgeEmoji = "🎨";
+        themeColor = "#7C3AED";
       }
 
       const workerIcon = L.divIcon({
-        className: `custom-worker-marker ${isSelected ? 'selected-marker' : ''}`,
+        className: `custom-worker-marker ${isSelected ? "selected-marker" : ""}`,
         html: `
-          <div style="position: relative; width: 42px; height: 46px; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform: ${isSelected ? 'scale(1.2)' : 'scale(1)'}; transition: all 0.2s ease;">
-            <div style="width: 34px; height: 34px; background: ${isSelected ? '#EA580C' : themeColor}; border: 2.5px solid #FFFFFF; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 16px;">
+          <div style="position: relative; width: 42px; height: 46px; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform: ${isSelected ? "scale(1.2)" : "scale(1)"}; transition: all 0.2s ease;">
+            <div style="width: 34px; height: 34px; background: ${isSelected ? "#EA580C" : themeColor}; border: 2.5px solid #FFFFFF; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 16px;">
               ${badgeEmoji}
             </div>
             <div style="background: #0F172A; color: #F8FAFC; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; margin-top: -6px; border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space: nowrap;">
@@ -193,7 +199,9 @@ export function WorkerMatchingMap({
         popupAnchor: [0, -42],
       });
 
-      const workerMarker = L.marker([workerLat, workerLng], { icon: workerIcon }).addTo(map);
+      const workerMarker = L.marker([workerLat, workerLng], {
+        icon: workerIcon,
+      }).addTo(map);
 
       const workerPopupHtml = `
         <div style="font-family: inherit; font-size: 12px; min-width: 200px; padding: 2px;">
@@ -202,7 +210,7 @@ export function WorkerMatchingMap({
               ${item.distanceFormatted} away
             </span>
             <span style="background: #ECFDF5; color: #047857; font-size: 9px; font-weight: bold; padding: 1px 6px; border-radius: 10px;">
-              ${item.availability?.status === 'available' ? 'Available Now' : 'On Job'}
+              ${item.availability?.status === "available" ? "Available Now" : "On Job"}
             </span>
           </div>
 
@@ -214,7 +222,7 @@ export function WorkerMatchingMap({
           <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 6px; margin-bottom: 8px; font-size: 11px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
               <span style="color: #64748B;">Guild:</span>
-              <strong style="color: #1E293B;">${item.cooperative?.name || 'Local Cooperative'}</strong>
+              <strong style="color: #1E293B;">${item.cooperative?.name || "Local Cooperative"}</strong>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span style="color: #64748B;">Floor Rate:</span>
@@ -234,14 +242,16 @@ export function WorkerMatchingMap({
       workerMarker.bindPopup(workerPopupHtml);
 
       // Handle popup open to wire Book button
-      workerMarker.on('popupopen', () => {
-        const btn = document.getElementById(`popup-book-btn-${worker.id || worker._id}`);
+      workerMarker.on("popupopen", () => {
+        const btn = document.getElementById(
+          `popup-book-btn-${worker.id || worker._id}`,
+        );
         if (btn && onBookWorker) {
           btn.onclick = () => onBookWorker(item);
         }
       });
 
-      workerMarker.on('click', () => {
+      workerMarker.on("click", () => {
         if (onSelectWorker) onSelectWorker(worker.id || worker._id);
       });
 
@@ -255,7 +265,9 @@ export function WorkerMatchingMap({
     // Fit map bounds to encompass all visible markers and customer
     const allCoords = [
       [custLat, custLng],
-      ...workers.map((w) => [w.coordinates?.latitude, w.coordinates?.longitude]).filter(([lat, lng]) => lat && lng),
+      ...workers
+        .map((w) => [w.coordinates?.latitude, w.coordinates?.longitude])
+        .filter(([lat, lng]) => lat && lng),
     ];
 
     if (allCoords.length > 1) {
@@ -264,17 +276,25 @@ export function WorkerMatchingMap({
     } else {
       map.setView([custLat, custLng], 13);
     }
-  }, [customerLocation, workers, cooperatives, selectedWorkerId, searchRadiusKm]);
+  }, [
+    customerLocation,
+    workers,
+    cooperatives,
+    selectedWorkerId,
+    searchRadiusKm,
+  ]);
 
   // Pan to selected worker when selectedWorkerId changes
   useEffect(() => {
     if (!selectedWorkerId || !mapInstanceRef.current) return;
-    const target = workers.find((w) => (w.worker?.id || w.worker?._id) === selectedWorkerId);
+    const target = workers.find(
+      (w) => (w.worker?.id || w.worker?._id) === selectedWorkerId,
+    );
     if (target?.coordinates?.latitude && target?.coordinates?.longitude) {
       mapInstanceRef.current.flyTo(
         [target.coordinates.latitude, target.coordinates.longitude],
         14,
-        { duration: 0.8 }
+        { duration: 0.8 },
       );
     }
   }, [selectedWorkerId, workers]);
@@ -282,7 +302,7 @@ export function WorkerMatchingMap({
   return (
     <div className="relative">
       <div ref={mapContainerRef} className={className} />
-      
+
       {/* Overlay Map Legend */}
       <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 backdrop-blur-sm border border-slate-200/80 rounded-xl px-3 py-2 text-[11px] shadow-md flex items-center gap-3">
         <div className="flex items-center gap-1.5">
@@ -301,4 +321,3 @@ export function WorkerMatchingMap({
     </div>
   );
 }
-

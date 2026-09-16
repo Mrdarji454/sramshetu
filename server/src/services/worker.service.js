@@ -369,7 +369,6 @@ export class WorkerService {
 
     const updatePayload = {
       user: cleanId,
-      userId: cleanId,
       skills: formattedSkills,
       experience: {
         years: Number(years) || 0,
@@ -416,12 +415,11 @@ export class WorkerService {
         submittedAt: new Date().toISOString(),
       },
       cooperative: cooperativeId || null,
-      cooperativeId: cooperativeId || null,
     };
 
     if (mongoose.connection.readyState === 1) {
       const profile = await Worker.findOneAndUpdate(
-        { $or: [{ user: cleanId }, { userId: cleanId }] },
+        { user: cleanId },
         { $set: updatePayload },
         { new: true, upsert: true, runValidators: true }
       );
