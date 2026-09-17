@@ -117,8 +117,29 @@ def predict_workload(request: WorkloadPredictionRequest):
         day_of_week=request.day_of_week,
     )
 
+    active_workers = max(request.available_workers, 1)
+    strain = predicted_demand / active_workers
+    if (request.available_workers == 0 and request.pending_bookings > 0) or strain >= 2.0:
+        level = "CRITICAL"
+    elif strain >= 1.2:
+        level = "HIGH"
+    elif strain >= 0.7:
+        level = "MODERATE"
+    else:
+        level = "LOW"
+
+    pred_inspections = round(predicted_demand * 0.22, 2)
+    priority = round(min(100.0, max(10.0, (strain / 2.0) * 50.0 + (request.pending_bookings / 40.0) * 35.0 + 15.0)), 1)
+
     return WorkloadPredictionResponse(
         predictedDemand=predicted_demand,
+        predictedInspections=pred_inspections,
+        workloadLevel=level,
+        priorityScore=priority,
+        predicted_demand=predicted_demand,
+        predicted_inspections=pred_inspections,
+        workload_level=level,
+        priority_score=priority,
         status="success",
         model_version="1.2.0",
         disclaimer="Synthetic demonstration data - not official government records",

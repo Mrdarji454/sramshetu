@@ -7,6 +7,7 @@ import adminRoutes from './admin.routes.js';
 import serviceRoutes from './service.routes.js';
 import bookingRoutes from './booking.routes.js';
 import matchingRoutes from './matching.routes.js';
+import aiRoutes from './ai.routes.js';
 
 const apiRouter = Router();
 
@@ -29,6 +30,7 @@ apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/services', serviceRoutes);
 apiRouter.use('/bookings', bookingRoutes);
 apiRouter.use('/matching', matchingRoutes);
+apiRouter.use('/ai', aiRoutes);
 
 export default apiRouter;
 

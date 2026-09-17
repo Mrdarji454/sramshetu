@@ -13,6 +13,7 @@ import {
   Briefcase,
   ShieldCheck
 } from 'lucide-react';
+import { WorkloadPredictionCard } from '../../components/dashboard';
 
 export function AdminDashboard() {
   const { user } = useAuth();
@@ -24,6 +25,39 @@ export function AdminDashboard() {
     fairnessIndex: '98.6%',
     dbtDisbursed: '₹18.6 Cr',
   });
+
+  const [prediction, setPrediction] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
+  // Load AI prediction (uses client-side API proxy)
+  async function loadPrediction() {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      // sample payload; adjust or wire to real inputs later
+      const payload = {
+        district: 'Ahmedabad',
+        serviceType: 'Plumbing',
+        applicationsLast7Days: 42,
+        applicationsLast30Days: 163,
+        pendingApplications: 18,
+        availableWorkers: 26,
+        averageCompletionTime: 2.5,
+      };
+
+      // `predictWorkload` is provided by the AI service client
+      const { predictWorkload } = await import('../../services/ai.service');
+      const res = await predictWorkload(payload);
+      // normalize: API returns { success, prediction, recommendation }
+      const pred = res?.prediction ?? res;
+      setPrediction(pred);
+    } catch (err) {
+      setAiError(err?.message || String(err) || 'Failed to fetch prediction');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   useEffect(() => {
     async function loadStats() {
@@ -40,6 +74,8 @@ export function AdminDashboard() {
       }
     }
     loadStats();
+    // fetch initial prediction
+    loadPrediction();
   }, []);
 
   return (
@@ -91,6 +127,21 @@ export function AdminDashboard() {
           <div className="text-2xl font-extrabold text-emerald-700 font-display">14.2 ms</div>
           <p className="text-xs text-slate-500 mt-1">Fairness Score: {stats.fairnessIndex || '98.6%'}</p>
         </Card>
+      </div>
+
+      {/* AI Workload Prediction Card */}
+      <div className="mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div>
+            <WorkloadPredictionCard
+              prediction={prediction}
+              loading={aiLoading}
+              error={aiError}
+              onRefresh={loadPrediction}
+              className="w-full"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Live Admin Verification Review System */}

@@ -20,5 +20,6 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  aiServiceUrl: process.env.AI_SERVICE_URL || 'http://localhost:8000',
 };
 

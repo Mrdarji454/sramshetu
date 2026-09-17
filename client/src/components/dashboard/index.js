@@ -6,4 +6,6 @@ export { Topbar } from './Topbar';
 export { SearchBar } from './SearchBar';
 export { Modal } from './Modal';
 export { Pagination } from './Pagination';
+export { WorkloadPredictionCard } from './WorkloadPredictionCard';
+export { CooperativeWorkloadWidget } from './CooperativeWorkloadWidget';
 
