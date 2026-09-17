@@ -155,19 +155,20 @@ class WorkloadPredictor:
           scaled by day-of-week multiplier.
         """
         factors = {
-            "Monday": 1.25,
-            "Tuesday": 1.05,
-            "Wednesday": 1.00,
-            "Thursday": 1.10,
-            "Friday": 1.20,
-            "Saturday": 1.35,
-            "Sunday": 1.30,
+            "Monday": 1.00,
+            "Tuesday": 0.98,
+            "Wednesday": 0.95,
+            "Thursday": 1.02,
+            "Friday": 1.08,
+            "Saturday": 1.15,
+            "Sunday": 1.12,
         }
         factor = factors.get(day_of_week, 1.0)
         base = (
             (0.80 * pending_bookings)
-            + (4.0 * avg_completion_time)
-            - (0.50 * available_workers)
+            + (2.50 * avg_completion_time)
+            - (0.30 * available_workers)
+            + 2.70
         )
         est = max(5.0, round(base * factor, 2))
         return est

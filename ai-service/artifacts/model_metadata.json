@@ -17,8 +17,8 @@
     "disclaimer": "Synthetic demonstration data - not official government records"
   },
   "metrics": {
-    "mean_absolute_error": 3.0698,
-    "r2_score": 0.9882
+    "mean_absolute_error": 2.8346,
+    "r2_score": 0.9858
   },
   "days_of_week_classes": [
     "Friday",
