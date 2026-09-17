@@ -1,0 +1,32 @@
+{
+  "model_type": "XGBRegressor",
+  "library_versions": {
+    "xgboost": "3.4.1",
+    "joblib": "1.6.0"
+  },
+  "dataset": {
+    "records": 1000,
+    "features": [
+      "pending_bookings",
+      "available_workers",
+      "avg_completion_time",
+      "day_of_week"
+    ],
+    "target": "actual_demand",
+    "is_synthetic": true,
+    "disclaimer": "Synthetic demonstration data - not official government records"
+  },
+  "metrics": {
+    "mean_absolute_error": 3.0698,
+    "r2_score": 0.9882
+  },
+  "days_of_week_classes": [
+    "Friday",
+    "Monday",
+    "Saturday",
+    "Sunday",
+    "Thursday",
+    "Tuesday",
+    "Wednesday"
+  ]
+}
