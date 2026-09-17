@@ -28,6 +28,7 @@ import {
   RefreshCw,
   X
 } from 'lucide-react';
+import { CooperativeWorkloadWidget } from '../../components/dashboard';
 
 export function CooperativeDashboard() {
   const { user } = useAuth();
@@ -53,6 +54,39 @@ export function CooperativeDashboard() {
   const [assignSelectedWorkerId, setAssignSelectedWorkerId] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState(null);
+  const [prediction, setPrediction] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
+
+     // Load AI prediction (uses client-side API proxy)
+  async function loadPrediction() {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      // sample payload; adjust or wire to real inputs later
+      const payload = {
+        district: 'Ahmedabad',
+        serviceType: 'Plumbing',
+        applicationsLast7Days: 42,
+        applicationsLast30Days: 163,
+        pendingApplications: 18,
+        availableWorkers: 26,
+        averageCompletionTime: 2.5,
+      };
+
+      // `predictWorkload` is provided by the AI service client
+      const { predictWorkload } = await import('../../services/ai.service');
+      const res = await predictWorkload(payload);
+      // normalize: API returns { success, prediction, recommendation }
+      const pred = res?.prediction ?? res;
+      setPrediction(pred);
+    } catch (err) {
+      setAiError(err?.message || String(err) || 'Failed to fetch prediction');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const loadData = async () => {
     setIsLoading(true);
@@ -88,6 +122,8 @@ export function CooperativeDashboard() {
 
   useEffect(() => {
     loadData();
+    // fetch initial AI prediction
+    loadPrediction();
   }, []);
 
   const handleEnrollSubmit = async (e) => {
@@ -188,6 +224,20 @@ export function CooperativeDashboard() {
         </div>
       )}
 
+ <div className="mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div>
+            <CooperativeWorkloadWidget
+              prediction={prediction}
+              loading={aiLoading}
+              error={aiError}
+              onRefresh={loadPrediction}
+              className="w-full"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Top View Toggle Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 mb-6 gap-3">
         <div className="flex items-center gap-2">
@@ -235,6 +285,8 @@ export function CooperativeDashboard() {
             <span>Society Bylaws</span>
           </button>
         </div>
+
+            
 
         {/* Status Pill */}
         {verification && (
