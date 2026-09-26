@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import workerService from '../../services/worker.service';
 import cooperativeService from '../../services/cooperative.service';
+import pincodeService from '../../services/pincode.service';
+import otpService from '../../services/otp.service';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import {
   User,
-  Wrench,
-  Award,
-  Briefcase,
-  MapPin,
-  Clock,
-  FileText,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
@@ -21,65 +18,79 @@ import {
   ArrowLeft,
   Loader2,
   Trash2,
-  Sparkles,
-  Building2,
+  MapPin,
+  Briefcase,
+  Wrench,
+  Award,
+  FileText,
+  Clock,
   ExternalLink,
-  RefreshCw,
+  Plus,
+  Compass,
+  Building2,
+  Phone,
+  Mail,
+  Lock,
 } from 'lucide-react';
-import { LOCALITY_PRESETS } from '../../utils/geo.utils';
 
-const TRADES_CATALOG = [
-  {
-    trade: 'Electrical & Power Systems',
-    skills: ['Concealed Wiring', 'DB Dressing', 'Solar Inverter', 'Earthing Testing', '3-Phase Substation Tech', 'Smart Home Automation'],
-    defaultFloor: 1200,
-    defaultHourly: 450,
-  },
-  {
-    trade: 'Plumbing & Water Sanitation',
-    skills: ['CPVC / UPVC Piping', 'Hydro-Pneumatic Pumps', 'Drain Cleaning & Jetting', 'Sanitary Fitting', 'Solar Water Heaters', 'Leak Detection'],
-    defaultFloor: 1100,
-    defaultHourly: 400,
-  },
-  {
-    trade: 'Carpentry & Woodwork',
-    skills: ['Modular Kitchen Fitting', 'Door Lock Installation', 'Furniture Restoration', 'False Ceiling Framing', 'Wood Veneer & Polishing'],
-    defaultFloor: 1250,
-    defaultHourly: 420,
-  },
-  {
-    trade: 'Masonry & Civil Works',
-    skills: ['Tile & Granite Laying', 'Brickwork & Plastering', 'Waterproofing Membrane', 'Structural Grouting', 'Concrete Formwork'],
-    defaultFloor: 1300,
-    defaultHourly: 400,
-  },
-  {
-    trade: 'Painting & Surface Coating',
-    skills: ['Interior Texture Emulsion', 'Exterior Weatherproof Coat', 'Waterproof Damp Proofing', 'Wood PU Polish', 'Airless Spray Painting'],
-    defaultFloor: 1050,
-    defaultHourly: 350,
-  },
-  {
-    trade: 'Appliance & HVAC Repair',
-    skills: ['Inverter AC Installation', 'Compressor Overhaul', 'PCB Diagnostics', 'Washing Machine Repair', 'Refrigerator Gas Charging'],
-    defaultFloor: 1400,
-    defaultHourly: 500,
-  },
+// Popular Professions Catalog (Requirement 4)
+const POPULAR_PROFESSIONS = [
+  'Electrician',
+  'Plumber',
+  'Carpenter',
+  'Painter',
+  'Cleaner',
+  'Gardener',
+  'Driver',
+  'Caregiver',
+  'Domestic Helper',
+  'Mason',
+  'Technician',
+  'Mechanic',
+  'Appliance Repair',
+  'AC Technician',
+  'Welder',
+  'Tailor',
 ];
+
+// Contextual Skill Suggestions by Profession (Requirement 6)
+const PROFESSION_SKILL_SUGGESTIONS = {
+  Plumber: ['Leak Detection', 'Drain Cleaning & Jetting', 'CPVC & UPVC Piping', 'Hydro-Pneumatic Pumps', 'Sanitary Fitting', 'Water Heater Repair'],
+  Electrician: ['Concealed House Wiring', 'DB Dressing & MCB', 'Solar Inverter Installation', 'Earthing & Grounding', '3-Phase Substation Maintenance', 'Smart Home Automation'],
+  Carpenter: ['Modular Kitchen Fitting', 'Door Lock Installation', 'Furniture Restoration', 'False Ceiling Framing', 'Wood Veneer & Polishing', 'Cabinet Making'],
+  Painter: ['Interior Texture Emulsion', 'Exterior Weatherproof Coat', 'Waterproof Damp Proofing', 'Wood PU Polish', 'Airless Spray Painting', 'Epoxy Floor Coating'],
+  Cleaner: ['Deep Home Cleaning', 'Sofa & Carpet Shampooing', 'Kitchen Chimney Degreasing', 'Bathroom Disinfection', 'Facade Window Cleaning'],
+  Gardener: ['Lawn Maintenance & Mowing', 'Plant Pruning & Grafting', 'Drip Irrigation Setup', 'Organic Pest Management', 'Landscape Design'],
+  Driver: ['Manual Transmission Driving', 'Automatic Vehicle Driving', 'Heavy Commercial Driving', 'Airport & Highway Chauffeur', 'Valet Logistics'],
+  Caregiver: ['Elderly Care Assistance', 'Post-Surgery Patient Attendant', 'Medication Management', 'Mobility Support & Therapy'],
+  'Domestic Helper': ['General Housekeeping', 'Meal Preparation & Cooking', 'Utensil Cleaning', 'Laundry & Ironing'],
+  Mason: ['Tile & Granite Laying', 'Brickwork & Mortar Plastering', 'Waterproofing Membrane', 'Structural Concrete Formwork', 'Grouting'],
+  Technician: ['CCTV & Security Wiring', 'Inverter Battery Servicing', 'Solar Panel Maintenance', 'Networking & Router Setup'],
+  Mechanic: ['Two-Wheeler Engine Overhaul', 'Car Brake & Suspension Repair', 'Wheel Alignment', 'Oil & Filter Replacement'],
+  'Appliance Repair': ['Washing Machine PCB Repair', 'Microwave Magnetron Fix', 'Refrigerator Gas Charging', 'Geyser Element Replacement'],
+  'AC Technician': ['Split AC Installation', 'Inverter Compressor Overhaul', 'Gas Charging & Leak Fix', 'Copper Pipe Flare & Braze', 'Filter Deep Jet Cleaning'],
+  Welder: ['TIG Stainless Steel Welding', 'MIG Industrial Welding', 'Arc Structural Fabrication', 'Safety Grill Design'],
+  Tailor: ['Custom Suit Stitching', 'Blouse & Traditional Wear', 'Alterations & Fitting', 'Curtain & Upholstery Hemming'],
+};
 
 const STEPS = [
-  { id: 'profile', title: 'Profile', icon: User, desc: 'Personal & Trade' },
-  { id: 'skills', title: 'Skills', icon: Award, desc: 'Specializations' },
-  { id: 'experience', title: 'Experience', icon: Briefcase, desc: 'History & Rates' },
-  { id: 'location', title: 'Location', icon: MapPin, desc: 'Service Area' },
-  { id: 'availability', title: 'Availability', icon: Clock, desc: 'Working Days' },
-  { id: 'documents', title: 'Documents', icon: FileText, desc: 'KYC & Trade ID' },
-  { id: 'verification', title: 'Verification', icon: ShieldCheck, desc: 'Review & Status' },
+  { stepNumber: 1, title: 'Basic Info', icon: User, desc: 'Name, Phone & Email' },
+  { stepNumber: 2, title: 'OTP Verify', icon: Phone, desc: 'Mobile Verification' },
+  { stepNumber: 3, title: 'Profile', icon: Briefcase, desc: 'Bio & Cooperative' },
+  { stepNumber: 4, title: 'Address', icon: MapPin, desc: 'Pincode & Location' },
+  { stepNumber: 5, title: 'Profession', icon: Award, desc: 'Primary Trade' },
+  { stepNumber: 6, title: 'Skills & Radius', icon: Wrench, desc: 'Experience & Radius' },
+  { stepNumber: 7, title: 'Documents', icon: FileText, desc: 'KYC & e-Shram' },
+  { stepNumber: 8, title: 'Review', icon: ShieldCheck, desc: 'Verify All Details' },
 ];
 
-export function WorkerOnboardingWizard({ onComplete, initialTab }) {
+export function WorkerOnboardingWizard() {
   const { user } = useAuth();
-  const [currentStep, setCurrentStep] = useState(initialTab || 0);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [currentStep, setCurrentStep] = useState(1);
+  const [completedSteps, setCompletedSteps] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -89,977 +100,1479 @@ export function WorkerOnboardingWizard({ onComplete, initialTab }) {
   const [formData, setFormData] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
+    email: user?.email || '',
+    phoneVerified: Boolean(user?.phoneVerified),
     profileImage: user?.profileImage || '',
-    primaryTrade: 'Electrical & Power Systems',
     bio: '',
-    cooperativeId: '',
-    skills: ['Concealed Wiring', 'DB Dressing'],
-    nsdcLevel: 'NSDC Level 3 Certified',
-    years: 4,
-    subTrades: ['Solar Inverter'],
-    dailyFloorRate: 1200,
-    hourlyRate: 450,
+    cooperativeId: '', // OPTIONAL
+    profession: 'Plumber',
+    customProfession: '',
     address: {
-      street: '',
-      city: 'Pune',
-      state: 'Maharashtra',
-      pincode: '411038',
+      line1: '',
+      line2: '',
+      pincode: '',
+      district: '',
+      state: '',
+      city: '',
+      latitude: 18.5204,
+      longitude: 73.8567,
     },
-    latitude: 18.5074,
-    longitude: 73.8058,
-    workingRadiusKm: 15,
-    availability: {
-      status: 'available',
-      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-      hours: { start: '08:00', end: '18:00' },
-    },
-    documents: [
-      { docType: 'Aadhaar Card', url: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600', name: 'aadhaar_card_front.jpg' },
-      { docType: 'NSDC Certificate', url: 'https://images.unsplash.com/photo-1589330694653-dad6ef0140be?w=600', name: 'nsdc_level3_cert.pdf' },
+    skills: [
+      {
+        skillId: 's1',
+        skillName: 'Leak Detection',
+        experienceYears: 3,
+        serviceRadiusKm: 15,
+      },
     ],
+    documents: {
+      aadhaar: null, // { url, name }
+      addressProof: null, // { url, name, docType }
+      eshramCard: null, // { url, name }
+    },
   });
 
-  const [verificationData, setVerificationData] = useState(null);
+  // Step 2 OTP State
+  const [otp, setOtp] = useState('');
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [mockOtpHint, setMockOtpHint] = useState(null);
 
-  // Load existing profile & cooperatives directory
+  // Step 4 Pincode & Geolocation State
+  const [isLookingUpPincode, setIsLookingUpPincode] = useState(false);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [pincodeError, setPincodeError] = useState('');
+
+  // Step 5 & 6 Custom input states
+  const [isCustomProfession, setIsCustomProfession] = useState(false);
+  const [newCustomSkillName, setNewCustomSkillName] = useState('');
+  const [showAddCustomSkillInput, setShowAddCustomSkillInput] = useState(false);
+
+  // Address proof document type
+  const [addressProofType, setAddressProofType] = useState('Electricity Bill');
+
+  // Cooldown timer
   useEffect(() => {
-    async function loadData() {
+    let t;
+    if (otpCooldown > 0) {
+      t = setInterval(() => setOtpCooldown((p) => p - 1), 1000);
+    }
+    return () => clearInterval(t);
+  }, [otpCooldown]);
+
+  // Load existing profile & progress
+  useEffect(() => {
+    async function loadWorkerData() {
       setIsLoading(true);
       try {
-        const [profile, coops, ver] = await Promise.allSettled([
-          workerService.getProfile(),
+        const [regStatus, coops] = await Promise.allSettled([
+          workerService.getRegistrationStatus(),
           cooperativeService.getCooperativesList(),
-          workerService.getVerificationStatus(),
         ]);
 
-        if (profile.status === 'fulfilled' && profile.value) {
-          const p = profile.value;
-          setFormData((prev) => ({
-            ...prev,
-            name: p.name || prev.name,
-            phone: p.phone || prev.phone,
-            profileImage: p.profileImage || prev.profileImage,
-            primaryTrade: p.experience?.primaryTrade || prev.primaryTrade,
-            bio: p.experience?.bio || prev.bio,
-            years: p.experience?.years || prev.years,
-            subTrades: p.experience?.subTrades || prev.subTrades,
-            skills: p.skills?.map((s) => (typeof s === 'string' ? s : s.name)) || prev.skills,
-            dailyFloorRate: p.rates?.dailyFloorRate || prev.dailyFloorRate,
-            hourlyRate: p.rates?.hourlyRate || prev.hourlyRate,
-            address: {
-              street: p.location?.address?.street || prev.address.street,
-              city: p.location?.address?.city || prev.address.city,
-              state: p.location?.address?.state || prev.address.state,
-              pincode: p.location?.address?.pincode || prev.address.pincode,
-            },
-            workingRadiusKm: p.location?.workingRadiusKm || prev.workingRadiusKm,
-            availability: {
-              status: p.availability?.status || prev.availability.status,
-              workingDays: p.availability?.workingDays || prev.availability.workingDays,
-              hours: p.availability?.hours || prev.availability.hours,
-            },
-            documents: p.verificationStatus?.documents?.length ? p.verificationStatus.documents : prev.documents,
-            cooperativeId: p.cooperativeId || p.cooperative?._id || p.cooperative || prev.cooperativeId,
-          }));
+        if (regStatus.status === 'fulfilled' && regStatus.value) {
+          const res = regStatus.value;
+
+          // Requirement 10: If status is PENDING_APPROVAL, redirect to /registration-pending
+          if (res.registrationStatus === 'PENDING_APPROVAL') {
+            navigate('/registration-pending', { replace: true });
+            return;
+          }
+
+          // If APPROVED or VERIFIED, redirect to dashboard — worker must not see onboarding form
+          const isVer = Boolean(
+            res.registrationStatus === 'APPROVED' ||
+            res.isVerified === true ||
+            String(res.verificationStatus?.status || res.verificationStatus || '').toLowerCase() === 'verified'
+          );
+          if (isVer) {
+            navigate('/worker/dashboard', { replace: true });
+            return;
+          }
+
+          const progress = res.registrationProgress || {};
+          const cSteps = progress.completedSteps?.length ? progress.completedSteps : [];
+          setCompletedSteps(cSteps);
+
+          // Handle URL step parameter with Requirement 11 step enforcement
+          const requestedStep = parseInt(searchParams.get('step'), 10);
+          if (requestedStep && requestedStep >= 1 && requestedStep <= 8) {
+            // Check if worker has completed all prerequisites up to requestedStep - 1
+            const canAccess = Array.from({ length: requestedStep - 1 }, (_, i) => i + 1).every((s) =>
+              cSteps.includes(s)
+            );
+            if (canAccess) {
+              setCurrentStep(requestedStep);
+            } else {
+              // Redirect to first incomplete step
+              const firstIncomplete = Math.min(...Array.from({ length: 8 }, (_, i) => i + 1).filter((s) => !cSteps.includes(s)));
+              setCurrentStep(firstIncomplete);
+              setSearchParams({ step: firstIncomplete });
+            }
+          } else {
+            const nextStep = progress.currentStep || (cSteps.length ? Math.max(...cSteps) + 1 : 1);
+            setCurrentStep(nextStep <= 8 ? nextStep : 8);
+          }
+
+          if (res.worker) {
+            const w = res.worker;
+            setFormData((prev) => ({
+              ...prev,
+              name: w.name || prev.name,
+              phone: w.phone || prev.phone,
+              email: w.email || prev.email,
+              phoneVerified: Boolean(res.phoneVerified || progress.phoneVerified),
+              bio: w.bio || prev.bio,
+              cooperativeId: w.cooperativeId || prev.cooperativeId,
+              profession: w.customProfession ? 'Other / Add New Profession' : (w.profession || prev.profession),
+              customProfession: w.customProfession || '',
+              address: {
+                ...prev.address,
+                ...(w.address || {}),
+                line1: w.address?.line1 || w.address?.addressLine1 || w.address?.street || w.location?.address?.street || prev.address.line1 || '',
+                addressLine1: w.address?.addressLine1 || w.address?.line1 || w.address?.street || w.location?.address?.street || prev.address.addressLine1 || '',
+                line2: w.address?.line2 || w.address?.addressLine2 || prev.address.line2 || '',
+                addressLine2: w.address?.addressLine2 || w.address?.line2 || prev.address.addressLine2 || '',
+                pincode: w.address?.pincode || w.location?.address?.pincode || prev.address.pincode || '',
+                city: w.address?.city || w.location?.address?.city || prev.address.city || '',
+                district: w.address?.district || prev.address.district || '',
+                state: w.address?.state || w.location?.address?.state || prev.address.state || '',
+              },
+              skills: w.skills?.length
+                ? w.skills.map((s, idx) => ({
+                    skillId: s.skillId || `s_${idx}`,
+                    skillName: s.skillName || s.name,
+                    experienceYears: s.experienceYears ?? s.years ?? 2,
+                    serviceRadiusKm: s.serviceRadiusKm ?? s.radius ?? 15,
+                  }))
+                : prev.skills,
+              documents: {
+                aadhaar: w.documents?.aadhaar || null,
+                addressProof: w.documents?.addressProof || null,
+                eshramCard: w.documents?.eshramCard || null,
+              },
+            }));
+
+            if (w.customProfession) {
+              setIsCustomProfession(true);
+            }
+          }
         }
 
         if (coops.status === 'fulfilled' && Array.isArray(coops.value)) {
           setCooperativesList(coops.value);
         }
-
-        if (ver.status === 'fulfilled' && ver.value) {
-          setVerificationData(ver.value);
-        }
       } catch (err) {
-        console.error('Error loading worker profile:', err);
+        console.error('Error loading worker onboarding progress:', err);
       } finally {
         setIsLoading(false);
       }
     }
 
-    loadData();
+    loadWorkerData();
   }, []);
 
-  const handleFileUpload = (e, docType) => {
+  // Update URL search param on step change
+  const navigateToStep = (targetStep) => {
+    // Check if worker can access targetStep
+    if (targetStep > currentStep) {
+      // Must have completed all previous steps
+      const canAccess = Array.from({ length: targetStep - 1 }, (_, i) => i + 1).every((s) =>
+        completedSteps.includes(s)
+      );
+      if (!canAccess) {
+        setFeedback({
+          type: 'error',
+          message: `Cannot jump to Step ${targetStep}. Please complete previous steps first.`,
+        });
+        return;
+      }
+    }
+    setCurrentStep(targetStep);
+    setSearchParams({ step: targetStep });
+    setFeedback(null);
+  };
+
+  // Requirement 1: OTP Send & Verify
+  const handleSendOtp = async () => {
+    setFeedback(null);
+    const cleanPhone = formData.phone.trim();
+    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 10) {
+      setFeedback({ type: 'error', message: 'Please enter a valid 10-digit mobile number' });
+      return;
+    }
+
+    setIsSendingOtp(true);
+    try {
+      const res = await otpService.sendOtp(cleanPhone);
+      setOtpCooldown(res.cooldownSeconds || 60);
+      setFeedback({ type: 'success', message: `OTP sent successfully to ${res.phone || cleanPhone}` });
+      if (res.mockOtp) setMockOtpHint(res.mockOtp);
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to send OTP' });
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setFeedback(null);
+    if (!otp.trim() || otp.trim().length !== 6) {
+      setFeedback({ type: 'error', message: 'Please enter the 6-digit OTP received on your phone' });
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      const res = await otpService.verifyOtp(formData.phone.trim(), otp.trim());
+      setFormData((prev) => ({ ...prev, phoneVerified: true }));
+      setMockOtpHint(null);
+      setFeedback({ type: 'success', message: res.message || 'Mobile number verified successfully!' });
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Invalid or expired OTP' });
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  // Requirement 3: Pincode Auto-Lookup (Triggered on 6 digits)
+  const handlePincodeChange = async (e) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+    setFormData((prev) => ({
+      ...prev,
+      address: {
+        ...prev.address,
+        pincode: val,
+        line1: prev.address.line1 || prev.address.addressLine1 || '',
+        addressLine1: prev.address.addressLine1 || prev.address.line1 || '',
+      },
+    }));
+    setPincodeError('');
+
+    if (val.length === 6) {
+      setIsLookingUpPincode(true);
+      try {
+        const data = await pincodeService.lookupPincode(val);
+        setFormData((prev) => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            pincode: val,
+            district: data.district || prev.address.district,
+            state: data.state || prev.address.state,
+            city: data.city || prev.address.city || data.district,
+            line1: prev.address.line1 || prev.address.addressLine1 || '',
+            addressLine1: prev.address.addressLine1 || prev.address.line1 || '',
+          },
+        }));
+        setPincodeError('');
+      } catch (err) {
+        setPincodeError(err.message || 'Invalid or non-existent PIN code. Please enter a valid Indian pincode.');
+      } finally {
+        setIsLookingUpPincode(false);
+      }
+    }
+  };
+
+  // Requirement 3B: Use My Current Location
+  const handleUseCurrentLocation = () => {
+    setFeedback(null);
+    if (!navigator.geolocation) {
+      setFeedback({
+        type: 'error',
+        message: 'Geolocation is not supported by your browser. Please enter your address manually.',
+      });
+      return;
+    }
+
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const geoData = await pincodeService.reverseGeocode(latitude, longitude);
+
+          setFormData((prev) => {
+            const resolvedLine1 = geoData.line1 || geoData.addressLine1 || geoData.addressLine || prev.address.line1 || '';
+            return {
+              ...prev,
+              address: {
+                ...prev.address,
+                line1: resolvedLine1,
+                addressLine1: resolvedLine1,
+                line2: prev.address.line2 || '',
+                addressLine2: prev.address.line2 || '',
+                pincode: geoData.pincode || prev.address.pincode || '',
+                city: geoData.city || prev.address.city || '',
+                district: geoData.district || prev.address.district || '',
+                state: geoData.state || prev.address.state || '',
+                latitude,
+                longitude,
+              },
+            };
+          });
+
+          const locLabel = [geoData.city, geoData.district, geoData.state].filter(Boolean).join(', ');
+          setFeedback({
+            type: 'success',
+            message: `Location detected: ${locLabel || 'Coordinates recorded'} (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
+          });
+        } catch (err) {
+          setFeedback({
+            type: 'error',
+            message: 'Failed to reverse geocode location. Please fill your address fields manually.',
+          });
+        } finally {
+          setIsDetectingLocation(false);
+        }
+      },
+      (err) => {
+        setIsDetectingLocation(false);
+        let msg = 'Location access denied. Please enter your address manually.';
+        if (err.code === 1 || err.code === (window.GeolocationPositionError?.PERMISSION_DENIED || 1)) {
+          msg = 'Location permission was denied. Please enter your address manually.';
+        } else if (err.code === 2) {
+          msg = 'Location unavailable. Please enter your address manually.';
+        } else if (err.code === 3) {
+          msg = 'Location request timed out. Please enter your address manually.';
+        }
+        setFeedback({ type: 'error', message: msg });
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
+
+  // File Upload Helper with Requirement 8C Validation
+  const handleFileUpload = (e, docKey, docTypeLabel) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setFeedback({ type: 'error', message: 'File size exceeds 5MB limit. Please upload a smaller file.' });
+      return;
+    }
+
+    // Validate type
+    const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowed.includes(file.type)) {
+      setFeedback({ type: 'error', message: 'Invalid file format. Allowed formats: PDF, JPG, JPEG, PNG.' });
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result;
-      const newDoc = { docType, url: dataUrl, name: file.name };
+      const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       setFormData((prev) => ({
         ...prev,
-        documents: [...prev.documents.filter((d) => d.docType !== docType), newDoc],
+        documents: {
+          ...prev.documents,
+          [docKey]: {
+            url: dataUrl,
+            name: cleanName,
+            docType: docTypeLabel || docKey,
+          },
+        },
       }));
-      setFeedback({ type: 'success', message: `${docType} attached successfully!` });
+      setFeedback({ type: 'success', message: `${docTypeLabel} uploaded successfully!` });
     };
     reader.readAsDataURL(file);
   };
 
-  const handleProfileImageUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFormData((prev) => ({ ...prev, profileImage: reader.result }));
-    };
-    reader.readAsDataURL(file);
+  // Skill Management (Requirements 6 & 7)
+  const handleAddSkillFromSuggestion = (skillName) => {
+    if (formData.skills.some((s) => s.skillName.toLowerCase() === skillName.toLowerCase())) {
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      skills: [
+        ...prev.skills,
+        {
+          skillId: `s_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          skillName,
+          experienceYears: 2,
+          serviceRadiusKm: 15,
+        },
+      ],
+    }));
   };
 
-  const toggleSkill = (skill) => {
-    setFormData((prev) => {
-      const exists = prev.skills.includes(skill);
-      const newSkills = exists ? prev.skills.filter((s) => s !== skill) : [...prev.skills, skill];
-      return { ...prev, skills: newSkills };
-    });
+  const handleAddCustomSkill = () => {
+    const trimmed = newCustomSkillName.trim();
+    if (!trimmed) {
+      setFeedback({ type: 'error', message: 'Custom skill name cannot be empty' });
+      return;
+    }
+    if (formData.skills.some((s) => s.skillName.toLowerCase() === trimmed.toLowerCase())) {
+      setFeedback({ type: 'error', message: 'This skill is already added in your roster' });
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      skills: [
+        ...prev.skills,
+        {
+          skillId: `cust_${Date.now()}`,
+          skillName: trimmed,
+          experienceYears: 2,
+          serviceRadiusKm: 15,
+        },
+      ],
+    }));
+
+    setNewCustomSkillName('');
+    setShowAddCustomSkillInput(false);
   };
 
-  const toggleDay = (day) => {
-    setFormData((prev) => {
-      const days = prev.availability.workingDays;
-      const exists = days.includes(day);
-      const newDays = exists ? days.filter((d) => d !== day) : [...days, day];
-      return {
-        ...prev,
-        availability: { ...prev.availability, workingDays: newDays },
-      };
-    });
+  const handleRemoveSkill = (skillId) => {
+    if (formData.skills.length <= 1) {
+      setFeedback({ type: 'error', message: 'You must maintain at least one technical skill.' });
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      skills: prev.skills.filter((s) => s.skillId !== skillId),
+    }));
   };
 
-  const handleSaveAndProceed = async (targetStep) => {
+  const handleSkillPropChange = (skillId, field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      skills: prev.skills.map((s) => (s.skillId === skillId ? { ...s, [field]: value } : s)),
+    }));
+  };
+
+  // Step Validation & Save Logic
+  const handleSaveAndNext = async () => {
     setFeedback(null);
     setIsSaving(true);
+
     try {
-      const updated = await workerService.saveOnboarding({
-        ...formData,
-        skills: formData.skills.map((name) => ({
-          name,
-          nsdcLevel: formData.nsdcLevel,
-          isPrimary: true,
-        })),
-      });
+      let stepPayload = {};
 
-      const ver = await workerService.getVerificationStatus();
-      setVerificationData(ver);
+      switch (currentStep) {
+        case 1: {
+          if (!formData.name.trim()) throw new Error('Full Name is required');
+          if (!formData.email.trim()) throw new Error('Email address is compulsory');
+          if (!formData.phone.trim()) throw new Error('Phone number is required');
+          stepPayload = {
+            name: formData.name.trim(),
+            email: formData.email.trim(),
+            phone: formData.phone.trim(),
+          };
+          break;
+        }
 
-      setFeedback({ type: 'success', message: 'Step saved successfully!' });
+        case 2: {
+          if (!formData.phoneVerified) {
+            throw new Error('Please verify your mobile number with OTP before continuing.');
+          }
+          stepPayload = {
+            phoneVerified: true,
+            phone: formData.phone,
+          };
+          break;
+        }
 
-      if (targetStep !== undefined) {
-        setCurrentStep(targetStep);
-      } else if (currentStep < STEPS.length - 1) {
-        setCurrentStep((prev) => prev + 1);
-      } else {
-        if (onComplete) onComplete(updated);
+        case 3: {
+          // Requirement 5: Cooperative is optional
+          stepPayload = {
+            bio: formData.bio,
+            profileImage: formData.profileImage,
+            cooperativeId: formData.cooperativeId || null,
+          };
+          break;
+        }
+
+        case 4: {
+          const addr = formData.address;
+          const pincode = String(addr.pincode || '').trim();
+          const district = String(addr.district || '').trim();
+          const state = String(addr.state || '').trim();
+          const line1 = String(addr.line1 || addr.addressLine1 || '').trim();
+
+          if (!pincode || !/^[1-9][0-9]{5}$/.test(pincode)) {
+            throw new Error('A valid 6-digit Indian postal PIN code is required');
+          }
+          if (!district) throw new Error('District is required. Please enter or autofill via pincode.');
+          if (!state) throw new Error('State is required. Please enter or autofill via pincode.');
+          if (!line1) throw new Error('Address Line 1 is required');
+
+          stepPayload = {
+            address: {
+              ...addr,
+              pincode,
+              district,
+              state,
+              line1,
+              addressLine1: line1,
+              line2: String(addr.line2 || addr.addressLine2 || '').trim(),
+              addressLine2: String(addr.line2 || addr.addressLine2 || '').trim(),
+              city: String(addr.city || district).trim(),
+            },
+          };
+          break;
+        }
+
+        case 5: {
+          // Requirement 4: Profession
+          let effectiveProfession = formData.profession;
+          if (formData.profession === 'Other / Add New Profession') {
+            if (!formData.customProfession.trim()) {
+              throw new Error('Please enter your custom profession title');
+            }
+            effectiveProfession = formData.customProfession.trim();
+          }
+          stepPayload = {
+            profession: effectiveProfession,
+            customProfession: isCustomProfession ? formData.customProfession.trim() : null,
+          };
+          break;
+        }
+
+        case 6: {
+          // Requirements 6 & 7: Skills with experience & radius
+          if (!formData.skills.length) {
+            throw new Error('Please add at least one technical skill');
+          }
+          for (const s of formData.skills) {
+            const exp = Number(s.experienceYears);
+            if (isNaN(exp) || exp < 0 || exp > 50) {
+              throw new Error(`Experience for "${s.skillName}" must be between 0 and 50 years`);
+            }
+            const rad = Number(s.serviceRadiusKm);
+            if (isNaN(rad) || rad < 1 || rad > 100) {
+              throw new Error(`Service radius for "${s.skillName}" must be between 1 and 100 km`);
+            }
+          }
+          stepPayload = { skills: formData.skills };
+          break;
+        }
+
+        case 7: {
+          // Requirements 8, 8B, 8C: Documents
+          const docs = formData.documents;
+          if (!docs.aadhaar?.url) throw new Error('Aadhaar Card document is required');
+          if (!docs.addressProof?.url) throw new Error('Address Proof document is required');
+          if (!docs.eshramCard?.url) {
+            throw new Error('e-Shram Card is required to complete worker registration.');
+          }
+          stepPayload = { documents: docs };
+          break;
+        }
+
+        case 8: {
+          // Review step -> Proceed to final submission
+          await handleFinalSubmit();
+          return;
+        }
       }
+
+      // Save step to backend
+      const res = await workerService.saveStep(currentStep, stepPayload);
+
+      // Update local completed steps
+      const newCompleted = Array.from(new Set([...completedSteps, currentStep])).sort((a, b) => a - b);
+      setCompletedSteps(newCompleted);
+
+      // Advance to next step
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      setSearchParams({ step: nextStep });
+      setFeedback({ type: 'success', message: `Step ${currentStep} completed successfully!` });
     } catch (err) {
-      setFeedback({ type: 'error', message: err.message || 'Failed to save onboarding data' });
+      setFeedback({ type: 'error', message: err.message || 'Validation failed. Please review your input.' });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const currentTradeObj = TRADES_CATALOG.find((t) => t.trade === formData.primaryTrade) || TRADES_CATALOG[0];
+  // Requirement 10: Final Submission
+  const handleFinalSubmit = async () => {
+    setIsSaving(true);
+    try {
+      await workerService.submitRegistration();
+      // Redirect to dedicated /registration-pending page
+      navigate('/registration-pending', { replace: true });
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to submit registration.' });
+      setIsSaving(false);
+    }
+  };
+
+  const effectiveProfession =
+    formData.profession === 'Other / Add New Profession' ? formData.customProfession || 'Custom' : formData.profession;
+
+  const currentSuggestions = PROFESSION_SKILL_SUGGESTIONS[effectiveProfession] || [
+    'General Maintenance',
+    'Emergency Repair',
+    'Component Diagnostics',
+    'Installation & Assembly',
+    'Preventive Inspection',
+  ];
 
   if (isLoading) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
         <Loader2 className="w-10 h-10 text-brand-saffron-500 animate-spin mx-auto mb-3" />
-        <p className="text-sm font-semibold text-slate-700">Loading worker onboarding profile...</p>
+        <p className="text-sm font-semibold text-slate-700">Loading worker registration wizard...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Onboarding Progress Header */}
+      {/* Top Stepper Progress Bar */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                Artisan Onboarding
+              <span className="text-xs font-bold uppercase tracking-wider text-brand-saffron-600 bg-brand-saffron-50 px-2.5 py-1 rounded-full border border-brand-saffron-200">
+                Official Worker KYC Onboarding
               </span>
               <span className="text-xs text-slate-400 font-medium">
-                Step {currentStep + 1} of {STEPS.length}
+                Step {currentStep} of {STEPS.length}
               </span>
             </div>
             <h2 className="text-xl font-extrabold text-brand-navy-900 mt-1">
-              {STEPS[currentStep].title}: {STEPS[currentStep].desc}
+              Step {currentStep}: {STEPS[currentStep - 1]?.title} – {STEPS[currentStep - 1]?.desc}
             </h2>
           </div>
 
-          <div className="flex items-center gap-2">
-            {verificationData && (
-              <Badge
-                variant={
-                  verificationData.status === 'verified'
-                    ? 'verified'
-                    : verificationData.status === 'rejected'
-                    ? 'outline'
-                    : 'saffron'
-                }
-                size="md"
-                dot
-              >
-                Verification: {verificationData.status.toUpperCase()}
-              </Badge>
-            )}
+          <div className="text-right">
+            <span className="text-xs text-slate-500 font-medium">Registration Progress</span>
+            <div className="text-lg font-extrabold text-brand-saffron-600">
+              {Math.round(((completedSteps.length) / STEPS.length) * 100)}%
+            </div>
           </div>
         </div>
 
-        {/* Step Navigation Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 border-t border-slate-100 pt-4">
-          {STEPS.map((s, idx) => {
-            const Icon = s.icon;
-            const isDone = idx < currentStep;
-            const isCurrent = idx === currentStep;
+        {/* Stepper Navigation Buttons */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-2 border-t border-slate-100">
+          {STEPS.map((s) => {
+            const isCompleted = completedSteps.includes(s.stepNumber);
+            const isCurrent = currentStep === s.stepNumber;
+            const isLocked = !isCompleted && !isCurrent;
+            const StepIcon = s.icon;
 
             return (
               <button
-                key={s.id}
+                key={s.stepNumber}
                 type="button"
-                onClick={() => setCurrentStep(idx)}
-                className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
+                disabled={isLocked}
+                onClick={() => navigateToStep(s.stepNumber)}
+                className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
                   isCurrent
-                    ? 'border-brand-saffron-500 bg-brand-saffron-50/50 ring-2 ring-brand-saffron-400/20'
-                    : isDone
-                    ? 'border-emerald-200 bg-emerald-50/30 text-emerald-800'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+                    ? 'border-brand-saffron-500 bg-brand-saffron-50/60 ring-2 ring-brand-saffron-500/20'
+                    : isCompleted
+                    ? 'border-emerald-300 bg-emerald-50/40 hover:bg-emerald-50 text-emerald-950 cursor-pointer'
+                    : 'border-slate-200 bg-slate-50 text-slate-400 opacity-60 cursor-not-allowed'
                 }`}
               >
-                <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                    isCurrent
-                      ? 'bg-brand-saffron-500 text-white'
-                      : isDone
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {isDone ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-3.5 h-3.5" />}
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-[10px] font-bold ${isCurrent ? 'text-brand-saffron-700' : isCompleted ? 'text-emerald-700' : 'text-slate-400'}`}>
+                    0{s.stepNumber}
+                  </span>
+                  {isCompleted ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : isLocked ? (
+                    <Lock className="w-3 h-3 text-slate-400" />
+                  ) : (
+                    <StepIcon className="w-3.5 h-3.5 text-brand-saffron-600" />
+                  )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-xs font-bold truncate ${isCurrent ? 'text-brand-saffron-950' : 'text-slate-800'}`}>
-                    {s.title}
-                  </p>
-                  <p className="text-[10px] text-slate-400 truncate">{s.desc}</p>
-                </div>
+                <span className={`text-xs font-bold truncate ${isCurrent ? 'text-slate-900' : isCompleted ? 'text-slate-800' : 'text-slate-500'}`}>
+                  {s.title}
+                </span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Action Notification Banner */}
+      {/* Feedback Banner */}
       {feedback && (
         <div
-          className={`p-4 rounded-xl text-xs flex items-center gap-2.5 border ${
+          className={`p-4 rounded-xl text-xs flex items-center gap-2.5 border animate-in fade-in ${
             feedback.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
               : 'bg-red-50 text-red-800 border-red-200'
           }`}
         >
           {feedback.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
           ) : (
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-600" />
           )}
           <span className="font-semibold">{feedback.message}</span>
         </div>
       )}
 
-      {/* Step Content */}
+      {/* Wizard Form Container */}
       <Card className="p-6 sm:p-8 bg-white border-slate-200 shadow-sm">
-        {/* STEP 1: PROFILE */}
-        {currentStep === 0 && (
-          <div className="space-y-6">
-            <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Professional Profile Details
-            </h3>
+        {/* STEP 1: BASIC INFORMATION */}
+        {currentStep === 1 && (
+          <div className="space-y-5">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Step 1: Basic Identity Information</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Please confirm your full name, contact phone, and mandatory email address.</p>
+            </div>
 
-            {/* Profile Picture Upload & Preview */}
-            <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-              <div className="relative">
-                {formData.profileImage ? (
-                  <img
-                    src={formData.profileImage}
-                    alt="Worker Profile"
-                    className="w-20 h-20 rounded-2xl object-cover border-2 border-brand-saffron-400 shadow-sm"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Full Legal Name <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g. Rajeshwar Shinde"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50"
                   />
-                ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-brand-navy-900 text-amber-400 font-extrabold text-2xl flex items-center justify-center border border-slate-300">
-                    {formData.name?.charAt(0) || 'W'}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 text-center sm:text-left">
-                <h4 className="text-sm font-bold text-slate-900">Artisan Profile Photo</h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Clear front-facing photo with technical uniform/hard-hat is recommended for instant client trust.
-                </p>
-                <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer shadow-sm">
-                    <Upload className="w-3.5 h-3.5 text-brand-saffron-600" />
-                    <span>Upload Image</span>
-                    <input type="file" accept="image/*" onChange={handleProfileImageUpload} className="hidden" />
-                  </label>
-                  {formData.profileImage && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData((p) => ({ ...p, profileImage: '' }))}
-                      className="text-xs text-red-600 hover:underline font-semibold"
-                    >
-                      Remove
-                    </button>
-                  )}
                 </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Full Legal Name (as in Aadhaar)
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Rajeshwar D. Shinde"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
-                />
-              </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Primary Trade / Specialization
+                  Mobile Number <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={formData.primaryTrade}
-                  onChange={(e) => {
-                    const newTrade = e.target.value;
-                    const tradeInfo = TRADES_CATALOG.find((t) => t.trade === newTrade);
-                    setFormData({
-                      ...formData,
-                      primaryTrade: newTrade,
-                      dailyFloorRate: tradeInfo?.defaultFloor || formData.dailyFloorRate,
-                      hourlyRate: tradeInfo?.defaultHourly || formData.hourlyRate,
-                      skills: tradeInfo?.skills.slice(0, 3) || [],
-                    });
-                  }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
-                >
-                  {TRADES_CATALOG.map((t) => (
-                    <option key={t.trade} value={t.trade}>
-                      {t.trade}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="tel"
+                    required
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value, phoneVerified: false })}
+                    placeholder="e.g. 98201 44019"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50"
+                  />
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Email Address <span className="text-red-500">* (Compulsory)</span>
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="e.g. rajeshwar.worker@domain.com"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">Official government KYC communications and customer booking confirmations will be dispatched here.</p>
               </div>
             </div>
+          </div>
+        )}
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Affiliated Cooperative Society / Welfare Guild
-              </label>
-              <select
-                value={formData.cooperativeId}
-                onChange={(e) => setFormData({ ...formData, cooperativeId: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
-              >
-                <option value="">Select Cooperative Guild...</option>
-                {cooperativesList.map((c) => (
-                  <option key={c.id || c._id} value={c.id || c._id}>
-                    {c.name} ({c.district || c.state || 'Maharashtra'})
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Your guild guarantees statutory floor rates and provides 100% direct payouts with zero cuts.
+        {/* STEP 2: MOBILE OTP VERIFICATION */}
+        {currentStep === 2 && (
+          <div className="space-y-5">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Step 2: Mobile OTP Verification</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Every artisan on ShramSetu must verify their mobile number with a secure one-time passcode.
+              </p>
+            </div>
+
+            {formData.phoneVerified ? (
+              <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <h4 className="text-base font-bold text-emerald-950">Mobile Verified Successfully!</h4>
+                <p className="text-xs text-emerald-800">
+                  Your phone number <strong className="font-mono">{formData.phone}</strong> is verified and linked to your artisan KYC.
+                </p>
+              </div>
+            ) : (
+              <div className="max-w-md mx-auto space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Registered Mobile Number
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSendingOtp || otpCooldown > 0}
+                      onClick={handleSendOtp}
+                    >
+                      {isSendingOtp ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : otpCooldown > 0 ? (
+                        `Resend (${otpCooldown}s)`
+                      ) : (
+                        'Send OTP'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Mock OTP notification banner for easy demo */}
+                {mockOtpHint && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+                    <span><strong>Demo Code:</strong> <code className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-amber-300">{mockOtpHint}</code></span>
+                    <button
+                      type="button"
+                      onClick={() => setOtp(mockOtpHint)}
+                      className="text-[11px] font-bold underline hover:text-amber-950"
+                    >
+                      Fill
+                    </button>
+                  </div>
+                )}
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <label className="block text-xs font-bold uppercase text-slate-700">Enter 6-Digit OTP</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="e.g. 123456"
+                      className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-base font-mono tracking-widest text-center font-bold bg-white focus:ring-2 focus:ring-brand-saffron-500"
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={isVerifyingOtp || otp.length !== 6}
+                      onClick={handleVerifyOtp}
+                    >
+                      {isVerifyingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify Code'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 3: WORKER PROFILE & OPTIONAL COOPERATIVE */}
+        {currentStep === 3 && (
+          <div className="space-y-5">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Step 3: Worker Profile & Cooperative Affiliation</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tell customers about your craftsmanship. Affiliation with a cooperative society is strictly optional.
               </p>
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Professional Bio & Technical Summary
+                Professional Bio / Summary
               </label>
               <textarea
                 rows={3}
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                placeholder="Describe your expertise, certifications, and types of projects handled..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
+                placeholder="e.g. Government certified master artisan with experience in domestic and commercial electrical repairs..."
+                className="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50"
               />
             </div>
+
+            {/* Requirement 5: Cooperative Society is OPTIONAL */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Cooperative Society <span className="text-slate-400 font-normal lowercase">(Optional)</span>
+                </label>
+                <span className="text-[10px] text-slate-500 font-medium">Independent artisans can leave this unselected</span>
+              </div>
+              <div className="relative">
+                <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={formData.cooperativeId}
+                  onChange={(e) => setFormData({ ...formData, cooperativeId: e.target.value })}
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50"
+                >
+                  <option value="">[ Select Cooperative (Optional) ]</option>
+                  {cooperativesList.map((coop) => (
+                    <option key={coop._id || coop.id} value={coop._id || coop.id}>
+                      {coop.name} ({coop.location?.district || 'Pune'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* STEP 2: SKILLS */}
-        {currentStep === 1 && (
-          <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Technical Skills & Certification</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Select your core technical skills in <strong className="text-slate-800">{formData.primaryTrade}</strong>
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2.5">
-                Available Skills in {formData.primaryTrade} (Click to toggle)
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                {currentTradeObj.skills.map((skill) => {
-                  const isSelected = formData.skills.includes(skill);
-                  return (
-                    <button
-                      key={skill}
-                      type="button"
-                      onClick={() => toggleSkill(skill)}
-                      className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all ${
-                        isSelected
-                          ? 'border-brand-saffron-500 bg-brand-saffron-50/60 ring-2 ring-brand-saffron-400/20 text-brand-saffron-950 font-bold'
-                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <span className="text-xs truncate">{skill}</span>
-                      {isSelected ? (
-                        <CheckCircle2 className="w-4 h-4 text-brand-saffron-600 flex-shrink-0" />
-                      ) : (
-                        <span className="w-4 h-4 rounded-full border border-slate-300 flex-shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
+        {/* STEP 4: ADDRESS + PINCODE AUTO-FILL + CURRENT LOCATION */}
+        {currentStep === 4 && (
+          <div className="space-y-5">
+            <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Step 4: Operational Base Address</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Enter your 6-digit postal pincode for automatic district and state population.
+                </p>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                NSDC / Skill India Certification Tier
-              </label>
-              <select
-                value={formData.nsdcLevel}
-                onChange={(e) => setFormData({ ...formData, nsdcLevel: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
+              {/* Requirement 3B: Use My Current Location */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                icon={isDetectingLocation ? Loader2 : Compass}
+                disabled={isDetectingLocation}
+                onClick={handleUseCurrentLocation}
+                className="whitespace-nowrap"
               >
-                <option value="Uncertified (Awaiting Guild Assessment)">Uncertified (Awaiting Guild Assessment)</option>
-                <option value="NSDC Level 1 Assistant">NSDC Level 1 Assistant</option>
-                <option value="NSDC Level 2 Junior Artisan">NSDC Level 2 Junior Artisan</option>
-                <option value="NSDC Level 3 Certified">NSDC Level 3 Certified (Standard Artisan)</option>
-                <option value="NSDC Level 4 Master Technician">NSDC Level 4 Master Technician (Supervisor)</option>
-                <option value="ITI Certified / State Trade Diploma">ITI Certified / State Trade Diploma</option>
-              </select>
+                {isDetectingLocation ? 'Detecting your location...' : 'Use My Current Location'}
+              </Button>
             </div>
-          </div>
-        )}
 
-        {/* STEP 3: EXPERIENCE & RATES */}
-        {currentStep === 2 && (
-          <div className="space-y-6">
-            <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Experience & Fair Floor Rates
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Years of Field Experience
+                  Postal Pincode <span className="text-red-500">*</span>
                 </label>
-                <div className="flex items-center gap-3">
+                <div className="relative">
                   <input
-                    type="range"
-                    min="0"
-                    max="30"
-                    value={formData.years}
-                    onChange={(e) => setFormData({ ...formData, years: Number(e.target.value) })}
-                    className="flex-1 accent-brand-saffron-500"
+                    type="text"
+                    maxLength={6}
+                    required
+                    value={formData.address.pincode}
+                    onChange={handlePincodeChange}
+                    placeholder="e.g. 395005"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono font-bold focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50"
                   />
-                  <span className="w-14 text-center font-bold text-sm bg-slate-100 py-1.5 rounded-lg text-slate-900">
-                    {formData.years} yrs
-                  </span>
+                  {isLookingUpPincode && (
+                    <Loader2 className="w-4 h-4 text-brand-saffron-600 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                  )}
                 </div>
+                {pincodeError && <span className="text-xs text-red-600 font-semibold mt-1 block">{pincodeError}</span>}
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Sub-Trades / Secondary Skills (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={formData.subTrades.join(', ')}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      subTrades: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                    })
-                  }
-                  placeholder="e.g. Solar Inverter, Panel Wiring"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
-                />
-              </div>
-            </div>
-
-            {/* Rates Card */}
-            <div className="p-5 rounded-2xl bg-amber-50/50 border border-amber-200">
-              <h4 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-brand-saffron-600" />
-                Statutory Cooperative Floor Rates (No Middleman Cut)
-              </h4>
-              <p className="text-xs text-amber-800 mt-1">
-                Your guild sets transparent floor wages so you are never underpaid. 100% of these rates are credited directly to your bank via DBT.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Daily Floor Wage (8 Hours)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-500 text-sm">₹</span>
-                    <input
-                      type="number"
-                      value={formData.dailyFloorRate}
-                      onChange={(e) => setFormData({ ...formData, dailyFloorRate: Number(e.target.value) })}
-                      className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-saffron-500 bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Hourly Standard Rate (Min 2 Hours)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-500 text-sm">₹</span>
-                    <input
-                      type="number"
-                      value={formData.hourlyRate}
-                      onChange={(e) => setFormData({ ...formData, hourlyRate: Number(e.target.value) })}
-                      className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-saffron-500 bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 4: LOCATION & WORKING RADIUS */}
-        {currentStep === 3 && (
-          <div className="space-y-6">
-            <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Operational Service Area & Location
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Street / Area Address
-                </label>
-                <input
-                  type="text"
-                  value={formData.address.street}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      address: { ...formData.address, street: e.target.value },
-                    })
-                  }
-                  placeholder="e.g. Near Shivajinagar Bus Stand"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  City / District
+                  City / Town / Locality
                 </label>
                 <input
                   type="text"
                   value={formData.address.city}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      address: { ...formData.address, city: e.target.value },
-                    })
+                    setFormData((prev) => ({
+                      ...prev,
+                      address: { ...prev.address, city: e.target.value },
+                    }))
                   }
-                  placeholder="e.g. Pune"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
+                  placeholder="e.g. Surat / Rander"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50/50"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  State
+                  District <span className="text-red-500">* (Auto-filled via PIN)</span>
                 </label>
                 <input
                   type="text"
+                  required
+                  value={formData.address.district}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      address: { ...prev.address, district: e.target.value },
+                    }))
+                  }
+                  placeholder="e.g. Surat"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50/50 text-slate-800 focus:ring-2 focus:ring-brand-saffron-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  State <span className="text-red-500">* (Auto-filled via PIN)</span>
+                </label>
+                <input
+                  type="text"
+                  required
                   value={formData.address.state}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      address: { ...formData.address, state: e.target.value },
-                    })
+                    setFormData((prev) => ({
+                      ...prev,
+                      address: { ...prev.address, state: e.target.value },
+                    }))
                   }
-                  placeholder="e.g. Maharashtra"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
+                  placeholder="e.g. Gujarat"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50/50 text-slate-800 focus:ring-2 focus:ring-brand-saffron-500"
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Postal Pincode
+                  Address Line 1 <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  value={formData.address.pincode}
+                  required
+                  value={formData.address.line1 || formData.address.addressLine1 || ''}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      address: { ...formData.address, pincode: e.target.value },
-                    })
+                    setFormData((prev) => ({
+                      ...prev,
+                      address: {
+                        ...prev.address,
+                        line1: e.target.value,
+                        addressLine1: e.target.value,
+                      },
+                    }))
                   }
-                  placeholder="e.g. 411038"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 bg-slate-50/50 focus:bg-white"
+                  placeholder="Flat / House No., Building Name, Street"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50/50"
                 />
               </div>
-            </div>
 
-            {/* Dispatch Coordinates & Locality Presets */}
-            <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 text-xs">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-blue-950 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                  Precise Dispatch Coordinates (Latitude & Longitude)
-                </span>
-                <span className="text-[10px] text-blue-700">Used for customer proximity matching</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Latitude</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={formData.latitude || 18.5204}
-                    onChange={(e) => setFormData({ ...formData, latitude: Number(e.target.value) })}
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-xs bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Longitude</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={formData.longitude || 73.8567}
-                    onChange={(e) => setFormData({ ...formData, longitude: Number(e.target.value) })}
-                    className="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-xs bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Quick Locality Presets */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-blue-200/60">
-                <span className="text-[10px] font-bold text-slate-500">Quick Pune Presets:</span>
-                {LOCALITY_PRESETS.slice(0, 6).map((p) => (
-                  <button
-                    key={p.name}
-                    type="button"
-                    onClick={() =>
-                      setFormData({
-                        ...formData,
-                        latitude: p.latitude,
-                        longitude: p.longitude,
-                        address: {
-                          ...formData.address,
-                          city: p.city,
-                          pincode: p.pincode,
-                          street: p.name,
-                        },
-                      })
-                    }
-                    className="px-2 py-0.5 rounded-lg bg-white hover:bg-blue-100 text-blue-800 text-[10px] font-semibold border border-blue-200 transition-colors"
-                  >
-                    {p.name.split(' ')[0]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                Operational Dispatch Radius: <span className="text-brand-saffron-600 font-extrabold">{formData.workingRadiusKm} km</span>
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="50"
-                value={formData.workingRadiusKm}
-                onChange={(e) => setFormData({ ...formData, workingRadiusKm: Number(e.target.value) })}
-                className="w-full accent-brand-saffron-500"
-              />
-              <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-1">
-                <span>1 km (Hyperlocal)</span>
-                <span>15 km (Recommended City Range)</span>
-                <span>50 km (Suburban)</span>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Address Line 2 / Landmark (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.address.line2 || formData.address.addressLine2 || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      address: {
+                        ...prev.address,
+                        line2: e.target.value,
+                        addressLine2: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="Near landmark, Sector, Cross road"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50/50"
+                />
               </div>
             </div>
           </div>
         )}
 
-        {/* STEP 5: AVAILABILITY */}
-        {currentStep === 4 && (
-          <div className="space-y-6">
-            <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
-              Weekly Working Schedule & Availability
-            </h3>
+        {/* STEP 5: PROFESSION SELECTION + CUSTOM PROFESSION */}
+        {currentStep === 5 && (
+          <div className="space-y-5">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Step 5: Primary Trade / Profession</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Select from standard crafts or add your customized artisan profession.
+              </p>
+            </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2.5">
-                Working Days (Click to toggle active days)
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                Select Profession <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => {
-                  const isActive = formData.availability.workingDays.includes(day);
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {POPULAR_PROFESSIONS.map((prof) => {
+                  const isSelected = formData.profession === prof && !isCustomProfession;
                   return (
                     <button
-                      key={day}
+                      key={prof}
                       type="button"
-                      onClick={() => toggleDay(day)}
+                      onClick={() => {
+                        setFormData({ ...formData, profession: prof });
+                        setIsCustomProfession(false);
+                      }}
                       className={`p-3 rounded-xl border text-center font-bold text-xs transition-all ${
-                        isActive
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm'
-                          : 'border-slate-200 bg-white text-slate-400 hover:bg-slate-50'
+                        isSelected
+                          ? 'border-brand-saffron-500 bg-brand-saffron-50/70 text-brand-saffron-950 ring-2 ring-brand-saffron-500/20'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                       }`}
                     >
-                      {day.slice(0, 3)}
+                      {prof}
+                    </button>
+                  );
+                })}
+
+                {/* Option to select Other / Add New */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({ ...formData, profession: 'Other / Add New Profession' });
+                    setIsCustomProfession(true);
+                  }}
+                  className={`p-3 rounded-xl border text-center font-bold text-xs transition-all ${
+                    isCustomProfession
+                      ? 'border-brand-saffron-500 bg-brand-saffron-50/70 text-brand-saffron-950 ring-2 ring-brand-saffron-500/20'
+                      : 'border-dashed border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  + Other / Add New
+                </button>
+              </div>
+            </div>
+
+            {/* Custom Profession Input (Requirement 4) */}
+            {isCustomProfession && (
+              <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-2 animate-in fade-in">
+                <label className="block text-xs font-bold uppercase tracking-wider text-amber-950">
+                  Enter Custom Profession Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.customProfession}
+                  onChange={(e) => setFormData({ ...formData, customProfession: e.target.value })}
+                  placeholder="e.g. Solar Photovoltaic Installer / Grade-A Blacksmith"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-amber-300 text-sm font-medium bg-white focus:ring-2 focus:ring-brand-saffron-500"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 6: SKILLS + EXPERIENCE + SERVICE RADIUS PER SKILL */}
+        {currentStep === 6 && (
+          <div className="space-y-6">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">
+                Step 6: Skills, Experience & Service Radius
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Every skill requires its own verified experience and operational dispatch radius.
+              </p>
+            </div>
+
+            {/* Quick Skill Suggestions for Selected Profession */}
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-2">
+                Suggested Skills for {effectiveProfession}:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {currentSuggestions.map((skillName) => {
+                  const alreadyAdded = formData.skills.some((s) => s.skillName.toLowerCase() === skillName.toLowerCase());
+                  return (
+                    <button
+                      key={skillName}
+                      type="button"
+                      disabled={alreadyAdded}
+                      onClick={() => handleAddSkillFromSuggestion(skillName)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                        alreadyAdded
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800 opacity-60 cursor-default'
+                          : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {alreadyAdded ? `✓ ${skillName}` : `+ ${skillName}`}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Shift Start Time
-                </label>
-                <input
-                  type="time"
-                  value={formData.availability.hours?.start || '08:00'}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      availability: {
-                        ...formData.availability,
-                        hours: { ...formData.availability.hours, start: e.target.value },
-                      },
-                    })
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50/50"
-                />
-              </div>
+            {/* Selected Skills Roster (Requirement 7) */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                Selected Skills ({formData.skills.length})
+              </span>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                  Shift End Time
-                </label>
-                <input
-                  type="time"
-                  value={formData.availability.hours?.end || '18:00'}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      availability: {
-                        ...formData.availability,
-                        hours: { ...formData.availability.hours, end: e.target.value },
-                      },
-                    })
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50/50"
-                />
-              </div>
+              {formData.skills.map((skillItem) => (
+                <div
+                  key={skillItem.skillId}
+                  className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="flex-1">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Skill Name</span>
+                    <h4 className="text-base font-extrabold text-slate-900">{skillItem.skillName}</h4>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4">
+                    {/* Experience per skill */}
+                    <div className="w-36">
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Experience: <strong className="text-brand-navy-900">{skillItem.experienceYears} Years</strong>
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="50"
+                        value={skillItem.experienceYears}
+                        onChange={(e) => handleSkillPropChange(skillItem.skillId, 'experienceYears', Number(e.target.value))}
+                        className="w-full accent-brand-saffron-500"
+                      />
+                    </div>
+
+                    {/* Service Radius per skill */}
+                    <div className="w-36">
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                        Service Radius: <strong className="text-brand-saffron-600">{skillItem.serviceRadiusKm} KM</strong>
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="100"
+                        value={skillItem.serviceRadiusKm}
+                        onChange={(e) => handleSkillPropChange(skillItem.skillId, 'serviceRadiusKm', Number(e.target.value))}
+                        className="w-full accent-brand-saffron-500"
+                      />
+                    </div>
+
+                    {/* Remove Skill */}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSkill(skillItem.skillId)}
+                      className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
+                      title="Remove Skill"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-              <div>
-                <span className="font-bold text-slate-900 text-xs block">Immediate Rota Status</span>
-                <span className="text-[11px] text-slate-500">
-                  Turn online to receive emergency nearby customer dispatches
-                </span>
+            {/* Custom Skill Input */}
+            {showAddCustomSkillInput ? (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex gap-2 animate-in fade-in">
+                <input
+                  type="text"
+                  value={newCustomSkillName}
+                  onChange={(e) => setNewCustomSkillName(e.target.value)}
+                  placeholder="Enter custom skill name (e.g. Industrial Pipe Braze)"
+                  className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-medium bg-white"
+                />
+                <Button type="button" variant="primary" size="sm" onClick={handleAddCustomSkill}>
+                  Add Skill
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddCustomSkillInput(false)}
+                >
+                  Cancel
+                </Button>
               </div>
+            ) : (
               <Button
-                variant={formData.availability.status === 'available' ? 'emerald' : 'outline'}
+                type="button"
+                variant="outline"
                 size="sm"
-                onClick={() =>
-                  setFormData({
-                    ...formData,
-                    availability: {
-                      ...formData.availability,
-                      status: formData.availability.status === 'available' ? 'offline' : 'available',
-                    },
-                  })
-                }
+                icon={Plus}
+                onClick={() => setShowAddCustomSkillInput(true)}
               >
-                {formData.availability.status === 'available' ? 'Online / Ready' : 'Standby / Offline'}
+                + Add Custom Skill
               </Button>
-            </div>
+            )}
           </div>
         )}
 
-        {/* STEP 6: DOCUMENTS */}
-        {currentStep === 5 && (
+        {/* STEP 7: DOCUMENTS (Aadhaar, Address Proof, e-Shram Card) */}
+        {currentStep === 7 && (
           <div className="space-y-6">
             <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">KYC & Technical Verification Documents</h3>
+              <h3 className="text-base font-bold text-slate-900">Step 7: Verification Documents</h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Upload clear photos or PDFs for state registry and registrar verification.
+                Upload your statutory documents for government compliance. Police verification is no longer required.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {[
-                { title: 'Aadhaar Identity Card', type: 'Aadhaar Card', desc: 'Front and back side for e-KYC' },
-                { title: 'NSDC / Skill Certificate', type: 'NSDC Certificate', desc: 'Skill India / ITI certification document' },
-                { title: 'Trade License / Police Verification', type: 'Trade License', desc: 'Municipal registration or police clearance' },
-              ].map((docItem) => {
-                const uploaded = formData.documents.find((d) => d.docType === docItem.type);
-
-                return (
-                  <div key={docItem.type} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-bold text-slate-900">{docItem.title}</h4>
-                        {uploaded ? (
-                          <Badge variant="verified" size="sm">Uploaded</Badge>
-                        ) : (
-                          <Badge variant="outline" size="sm">Required</Badge>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-500 mb-3">{docItem.desc}</p>
-
-                      {uploaded && (
-                        <div className="mb-3">
-                          <img
-                            src={uploaded.url}
-                            alt={docItem.title}
-                            className="w-full h-28 rounded-lg object-cover border border-slate-200 shadow-sm"
-                          />
-                          <p className="text-[10px] text-slate-500 truncate mt-1 font-mono">{uploaded.name}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-2">
-                      <label className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-xs font-bold text-slate-800 cursor-pointer shadow-sm">
-                        <Upload className="w-3.5 h-3.5 text-brand-saffron-600" />
-                        <span>{uploaded ? 'Replace Document' : 'Upload File'}</span>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(e) => handleFileUpload(e, docItem.type)}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
+            {/* Requirement 8B: e-Shram Card Notice & External Portal Link */}
+            {!formData.documents.eshramCard?.url && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-900">e-Shram Card is required to complete worker registration.</h4>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      Don't have an e-Shram card yet? Register directly on the official Ministry of Labour & Employment portal.
+                    </p>
                   </div>
-                );
-              })}
+                </div>
+                <a
+                  href="https://www.eshram.gov.in/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-colors whitespace-nowrap shadow-sm"
+                >
+                  <span>Get e-Shram Card</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            )}
+
+            {/* Document Upload Cards (Only 3 required documents: Aadhaar, Address Proof, e-Shram Card) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Document 1: Aadhaar */}
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-bold text-slate-900">Aadhaar Identity Card</h4>
+                    {formData.documents.aadhaar?.url ? (
+                      <Badge variant="verified" size="sm">Uploaded ✓</Badge>
+                    ) : (
+                      <Badge variant="outline" size="sm" className="border-red-300 text-red-600">Required</Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mb-3">Front or back scan (PDF, JPG, PNG under 5MB)</p>
+                  {formData.documents.aadhaar?.name && (
+                    <div className="p-2 rounded-lg bg-white border border-slate-200 text-[10px] font-mono truncate text-slate-700 mb-3">
+                      {formData.documents.aadhaar.name}
+                    </div>
+                  )}
+                </div>
+
+                <label className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-xs font-bold text-slate-800 cursor-pointer shadow-sm">
+                  <Upload className="w-3.5 h-3.5 text-brand-saffron-600" />
+                  <span>{formData.documents.aadhaar?.url ? 'Replace Document' : 'Upload Aadhaar'}</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleFileUpload(e, 'aadhaar', 'Aadhaar Card')}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Document 2: Address Proof */}
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-bold text-slate-900">Address Proof</h4>
+                    {formData.documents.addressProof?.url ? (
+                      <Badge variant="verified" size="sm">Uploaded ✓</Badge>
+                    ) : (
+                      <Badge variant="outline" size="sm" className="border-red-300 text-red-600">Required</Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mb-2">Electricity Bill or Property Tax Document</p>
+                  <select
+                    value={addressProofType}
+                    onChange={(e) => setAddressProofType(e.target.value)}
+                    className="w-full mb-3 px-2 py-1 rounded-lg border border-slate-200 text-xs bg-white"
+                  >
+                    <option value="Electricity Bill">Electricity Bill</option>
+                    <option value="Property Tax Receipt">Property Tax Receipt</option>
+                    <option value="Water Bill">Water Utility Bill</option>
+                  </select>
+                  {formData.documents.addressProof?.name && (
+                    <div className="p-2 rounded-lg bg-white border border-slate-200 text-[10px] font-mono truncate text-slate-700 mb-3">
+                      {formData.documents.addressProof.name}
+                    </div>
+                  )}
+                </div>
+
+                <label className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-xs font-bold text-slate-800 cursor-pointer shadow-sm">
+                  <Upload className="w-3.5 h-3.5 text-brand-saffron-600" />
+                  <span>{formData.documents.addressProof?.url ? 'Replace Proof' : 'Upload Address Proof'}</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleFileUpload(e, 'addressProof', addressProofType)}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Document 3: e-Shram Card (MANDATORY) */}
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-bold text-slate-900">e-Shram Card</h4>
+                    {formData.documents.eshramCard?.url ? (
+                      <Badge variant="verified" size="sm">Uploaded ✓</Badge>
+                    ) : (
+                      <Badge variant="outline" size="sm" className="border-amber-400 text-amber-700 bg-amber-50">Mandatory</Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mb-3">Ministry of Labour & Employment Worker Card</p>
+                  {formData.documents.eshramCard?.name && (
+                    <div className="p-2 rounded-lg bg-white border border-slate-200 text-[10px] font-mono truncate text-slate-700 mb-3">
+                      {formData.documents.eshramCard.name}
+                    </div>
+                  )}
+                </div>
+
+                <label className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-xs font-bold text-slate-800 cursor-pointer shadow-sm">
+                  <Upload className="w-3.5 h-3.5 text-brand-saffron-600" />
+                  <span>{formData.documents.eshramCard?.url ? 'Replace e-Shram' : 'Upload e-Shram Card'}</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleFileUpload(e, 'eshramCard', 'e-Shram Card')}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
           </div>
         )}
 
-        {/* STEP 7: VERIFICATION & SUMMARY */}
-        {currentStep === 6 && (
+        {/* STEP 8: REVIEW ALL DATA BEFORE FINAL SUBMISSION */}
+        {currentStep === 8 && (
           <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Verification Status & Checklist</h3>
-                <p className="text-xs text-slate-500">Live statutory review tracker with cooperative registrar</p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                icon={RefreshCw}
-                onClick={async () => {
-                  const ver = await workerService.getVerificationStatus();
-                  setVerificationData(ver);
-                }}
-              >
-                Refresh
-              </Button>
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900">Step 8: Review Application Details</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Review all registered credentials before submitting for administrative verification.
+              </p>
             </div>
 
-            {/* Current Status Box */}
-            <div className="p-5 rounded-2xl bg-brand-navy-950 text-white border border-slate-800 shadow-lg">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <span className="text-[11px] font-mono text-amber-400 uppercase tracking-wider">
-                    Registration Authority: MoSDE & State Registry
-                  </span>
-                  <h4 className="text-xl font-extrabold text-white font-display mt-1">
-                    {verificationData?.status === 'verified'
-                      ? '✓ Verified Sovereign Artisan'
-                      : verificationData?.status === 'rejected'
-                      ? '✗ Action Required: Verification Rejected'
-                      : '⏳ Application Under State Registrar Review'}
-                  </h4>
-                  <p className="text-xs text-slate-300 mt-1">
-                    {verificationData?.status === 'verified'
-                      ? 'Your profile is approved and active in high-priority proximity dispatch rotas.'
-                      : verificationData?.status === 'rejected'
-                      ? `Reason: ${verificationData.rejectionReason || 'Please review your uploaded documents and resubmit.'}`
-                      : 'Your documents have been submitted to your cooperative society registrar for Aadhaar & NSDC verification.'}
-                  </p>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              {/* Profile Card */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                <span className="font-bold uppercase tracking-wider text-slate-500 block">Personal & Trade Info</span>
+                <div><span className="text-slate-400">Name:</span> <strong className="text-slate-800">{formData.name}</strong></div>
+                <div><span className="text-slate-400">Mobile:</span> <strong className="text-slate-800">{formData.phone} (Verified ✓)</strong></div>
+                <div><span className="text-slate-400">Email:</span> <strong className="text-slate-800">{formData.email}</strong></div>
+                <div><span className="text-slate-400">Profession:</span> <strong className="text-slate-800">{effectiveProfession}</strong></div>
+                <div><span className="text-slate-400">Cooperative:</span> <strong className="text-slate-800">{cooperativesList.find((c) => c._id === formData.cooperativeId)?.name || 'Independent / None'}</strong></div>
+              </div>
 
-                <Badge
-                  variant={
-                    verificationData?.status === 'verified'
-                      ? 'verified'
-                      : verificationData?.status === 'rejected'
-                      ? 'outline'
-                      : 'saffron'
-                  }
-                  size="lg"
-                  dot
-                >
-                  {(verificationData?.status || 'PENDING').toUpperCase()}
-                </Badge>
+              {/* Address Card */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                <span className="font-bold uppercase tracking-wider text-slate-500 block">Address & Jurisdiction</span>
+                <div><span className="text-slate-400">Line 1:</span> <strong className="text-slate-800">{formData.address.line1}</strong></div>
+                <div><span className="text-slate-400">Pincode:</span> <strong className="text-slate-800 font-mono">{formData.address.pincode}</strong></div>
+                <div><span className="text-slate-400">District & State:</span> <strong className="text-slate-800">{formData.address.district}, {formData.address.state}</strong></div>
               </div>
             </div>
 
-            {/* Checklist */}
-            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">
-                Statutory Onboarding Verification Checklist
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {verificationData?.checklist?.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                          item.complete ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
-                        }`}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="text-xs font-medium text-slate-800">{item.title}</span>
+            {/* Skills Table */}
+            <div>
+              <span className="font-bold uppercase tracking-wider text-xs text-slate-500 block mb-2">Technical Skills & Radius</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {formData.skills.map((s) => (
+                  <div key={s.skillId} className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-800">{s.skillName}</span>
+                    <div className="text-slate-500">
+                      <span>{s.experienceYears} Yrs Exp</span> • <span className="font-bold text-brand-saffron-600">{s.serviceRadiusKm} KM</span>
                     </div>
-                    <Badge variant={item.complete ? 'verified' : 'default'} size="sm">
-                      {item.complete ? 'Done' : 'Pending'}
-                    </Badge>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Documents Checklist */}
+            <div>
+              <span className="font-bold uppercase tracking-wider text-xs text-slate-500 block mb-2">Attached Documents</span>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {formData.documents.aadhaar?.url && <Badge variant="verified">✓ Aadhaar Card</Badge>}
+                {formData.documents.addressProof?.url && <Badge variant="verified">✓ Address Proof</Badge>}
+                {formData.documents.eshramCard?.url && <Badge variant="verified">✓ e-Shram Card</Badge>}
               </div>
             </div>
           </div>
@@ -1068,30 +1581,30 @@ export function WorkerOnboardingWizard({ onComplete, initialTab }) {
         {/* Wizard Footer Controls */}
         <div className="border-t border-slate-100 pt-5 mt-6 flex items-center justify-between gap-3">
           <Button
+            type="button"
             variant="outline"
             size="md"
             icon={ArrowLeft}
-            disabled={currentStep === 0 || isSaving}
-            onClick={() => setCurrentStep((p) => p - 1)}
+            disabled={currentStep === 1 || isSaving}
+            onClick={() => navigateToStep(currentStep - 1)}
           >
             Previous
           </Button>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="primary"
-              size="md"
-              disabled={isSaving}
-              iconRight={currentStep === STEPS.length - 1 ? CheckCircle2 : ArrowRight}
-              onClick={() => handleSaveAndProceed()}
-            >
-              {isSaving
-                ? 'Saving...'
-                : currentStep === STEPS.length - 1
-                ? 'Submit & Finish Onboarding'
-                : `Save & Continue to ${STEPS[currentStep + 1]?.title}`}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="primary"
+            size="md"
+            disabled={isSaving}
+            iconRight={currentStep === 8 ? CheckCircle2 : ArrowRight}
+            onClick={handleSaveAndNext}
+          >
+            {isSaving
+              ? 'Saving...'
+              : currentStep === 8
+              ? 'Submit Application for Admin Approval'
+              : `Save & Continue to Step ${currentStep + 1}`}
+          </Button>
         </div>
       </Card>
     </div>
@@ -1099,4 +1612,3 @@ export function WorkerOnboardingWizard({ onComplete, initialTab }) {
 }
 
 export default WorkerOnboardingWizard;
-
