@@ -8,6 +8,7 @@ import serviceRoutes from './service.routes.js';
 import bookingRoutes from './booking.routes.js';
 import matchingRoutes from './matching.routes.js';
 import aiRoutes from './ai.routes.js';
+import pincodeRoutes from './pincode.routes.js';
 
 const apiRouter = Router();
 
@@ -21,7 +22,7 @@ apiRouter.get('/health', (req, res) => {
   });
 });
 
-// Resource routes under /api/v1
+// Resource routes under /api and /api/v1
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/workers', workerRoutes);
@@ -31,6 +32,7 @@ apiRouter.use('/services', serviceRoutes);
 apiRouter.use('/bookings', bookingRoutes);
 apiRouter.use('/matching', matchingRoutes);
 apiRouter.use('/ai', aiRoutes);
+apiRouter.use('/pincode', pincodeRoutes);
 
 export default apiRouter;
 

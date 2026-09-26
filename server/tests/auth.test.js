@@ -51,6 +51,7 @@ async function runAuthTests() {
   const registeredWorker = await AuthService.register({
     name: 'Santosh Electrician',
     phone: '+919820112233',
+    email: 'santosh.electrician@shramsetu.in',
     password: 'workerPass123',
     role: 'worker', // lowercase input test
   });
@@ -60,6 +61,7 @@ async function runAuthTests() {
   const registeredCoop = await AuthService.register({
     name: 'Pune Shramik Union',
     phone: '+919820199999',
+    email: 'pune.union@shramsetu.in',
     password: 'coopSecret123',
     role: 'COOPERATIVE',
   });
@@ -69,10 +71,55 @@ async function runAuthTests() {
   const registeredAdmin = await AuthService.register({
     name: 'Platform Admin',
     phone: '+919999999999',
+    email: 'admin@shramsetu.in',
     password: 'adminSecret123',
     role: 'ADMIN',
   });
   assert(registeredAdmin.user.role === 'ADMIN', 'Register accepts ADMIN role');
+
+  // Test Requirement 2: Email is Compulsory
+  let missingEmailError = null;
+  try {
+    await AuthService.register({
+      name: 'No Email User',
+      phone: '+919820155555',
+      password: 'password123',
+      role: 'USER',
+    });
+  } catch (err) {
+    missingEmailError = err;
+  }
+  assert(missingEmailError && missingEmailError.statusCode === 400, 'Register rejects missing email with 400 (Requirement 2)');
+
+  // Test Invalid Email Format
+  let invalidEmailError = null;
+  try {
+    await AuthService.register({
+      name: 'Bad Email User',
+      phone: '+919820155556',
+      email: 'not-an-email',
+      password: 'password123',
+      role: 'USER',
+    });
+  } catch (err) {
+    invalidEmailError = err;
+  }
+  assert(invalidEmailError && invalidEmailError.statusCode === 400, 'Register rejects invalid email format with 400');
+
+  // Test Duplicate Email
+  let duplicateEmailError = null;
+  try {
+    await AuthService.register({
+      name: 'Duplicate Email User',
+      phone: '+919820155557',
+      email: 'aakash@example.com', // Already registered in Test 1
+      password: 'password123',
+      role: 'USER',
+    });
+  } catch (err) {
+    duplicateEmailError = err;
+  }
+  assert(duplicateEmailError && duplicateEmailError.statusCode === 409, 'Register rejects duplicate email with 409');
 
   // Test Invalid Role Registration
   let invalidRoleError = null;
@@ -80,6 +127,7 @@ async function runAuthTests() {
     await AuthService.register({
       name: 'Hacker',
       phone: '+919999900000',
+      email: 'hacker@darkweb.org',
       password: 'badPass123',
       role: 'SUPER_ROOT',
     });

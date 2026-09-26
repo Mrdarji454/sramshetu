@@ -21,5 +21,7 @@ export const config = {
   },
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   aiServiceUrl: process.env.AI_SERVICE_URL || 'http://localhost:8000',
+  pincodeApiUrl: process.env.PINCODE_API_URL || 'https://api.postalpincode.in/pincode',
+  nominatimApiUrl: process.env.NOMINATIM_API_URL || 'https://nominatim.openstreetmap.org/reverse',
 };
 

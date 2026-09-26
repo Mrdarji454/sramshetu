@@ -27,7 +27,9 @@ export const updateAvailability = asyncHandler(async (req, res) => {
 export const uploadDocument = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const { docType, url, name } = req.body;
-  const documents = await WorkerService.uploadDocument(userId, { docType, url, name });
+  // Validate document
+  const validated = WorkerService.validateDocumentUpload({ docType, url, name });
+  const documents = await WorkerService.uploadDocument(userId, validated);
   return successResponse(res, documents, 'Document uploaded successfully', 200);
 });
 
@@ -41,4 +43,35 @@ export const getAssignedJobs = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const jobs = await WorkerService.getAssignedJobs(userId);
   return successResponse(res, jobs, 'Assigned jobs retrieved', 200);
+});
+
+/**
+ * Requirement 10 & 11: Registration Status & Progress
+ * GET /api/v1/workers/registration-status
+ */
+export const getRegistrationStatus = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const status = await WorkerService.getRegistrationStatus(userId);
+  return successResponse(res, status, 'Registration status retrieved', 200);
+});
+
+/**
+ * Requirement 11: Save and validate specific registration step
+ * POST /api/v1/workers/step/:stepNumber
+ */
+export const saveStep = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const { stepNumber } = req.params;
+  const result = await WorkerService.saveStep(userId, stepNumber, req.body);
+  return successResponse(res, result, `Step ${stepNumber} saved successfully`, 200);
+});
+
+/**
+ * Requirement 10: Final registration submission
+ * POST /api/v1/workers/submit-registration
+ */
+export const submitRegistration = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const result = await WorkerService.submitRegistration(userId);
+  return successResponse(res, result, result.message, 200);
 });

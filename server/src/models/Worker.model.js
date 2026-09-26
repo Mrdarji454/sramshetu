@@ -182,6 +182,62 @@ const workerSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+
+    // ─── Onboarding / Registration Fields ───────────────────────────────────
+    name: { type: String, trim: true },
+    email: { type: String, trim: true, lowercase: true },
+    phone: { type: String, trim: true },
+    phoneVerified: { type: Boolean, default: false },
+    profileImage: { type: String, trim: true, default: '' },
+    bio: { type: String, trim: true, maxlength: 2000 },
+    profession: { type: String, trim: true },
+    customProfession: { type: String, trim: true, default: null },
+
+    address: {
+      line1: { type: String, trim: true },
+      line2: { type: String, trim: true },
+      pincode: { type: String, trim: true },
+      district: { type: String, trim: true },
+      state: { type: String, trim: true },
+      city: { type: String, trim: true },
+      latitude: { type: Number },
+      longitude: { type: Number },
+    },
+
+    documents: {
+      aadhaar: {
+        url: { type: String, default: null },
+        name: { type: String, default: null },
+        uploadedAt: { type: Date, default: null },
+      },
+      addressProof: {
+        docType: { type: String, default: 'Electricity Bill' },
+        url: { type: String, default: null },
+        name: { type: String, default: null },
+        uploadedAt: { type: Date, default: null },
+      },
+      eshramCard: {
+        url: { type: String, default: null },
+        name: { type: String, default: null },
+        uploadedAt: { type: Date, default: null },
+      },
+    },
+
+    eshramProvided: { type: Boolean, default: false },
+    // `cooperative` is aliased as `cooperativeId` below; keep a single field definition to avoid Mongoose path conflicts.
+    registrationStatus: {
+      type: String,
+      enum: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED'],
+      default: 'DRAFT',
+      index: true,
+    },
+
+    rejectionReason: { type: String, trim: true, default: null },
+
+    registrationProgress: {
+      currentStep: { type: Number, default: 1 },
+      maxCompletedStep: { type: Number, default: 0 },
+    },
   },
   {
     timestamps: true,
@@ -268,11 +324,10 @@ workerSchema.virtual('nsdcCertified')
     this.verificationStatus.nsdcCertified = v;
   });
 
-workerSchema.virtual('policeVerification')
-  .get(function () { return this.verificationStatus?.policeVerification; })
-  .set(function (v) {
-    if (!this.verificationStatus) this.verificationStatus = {};
-    this.verificationStatus.policeVerification = v;
+workerSchema.virtual('isVerified')
+  .get(function () {
+    const verStatus = String(this.verificationStatus?.status || '').toLowerCase();
+    return verStatus === 'verified' || this.registrationStatus === 'APPROVED';
   });
 
 export const Worker = mongoose.model('Worker', workerSchema);
