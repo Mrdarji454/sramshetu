@@ -1,6 +1,36 @@
 import { AuthService } from '../services/auth.service.js';
+import { OtpService } from '../services/otp.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
+import { AppError } from '../utils/AppError.js';
+
+/**
+ * @desc    Send OTP to mobile number
+ * @route   POST /api/auth/otp/send
+ * @access  Public
+ */
+export const sendOtp = asyncHandler(async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) {
+    throw new AppError('Phone number is required to send OTP', 400);
+  }
+  const result = await OtpService.sendOtp(phone);
+  return successResponse(res, result, 'OTP sent successfully', 200);
+});
+
+/**
+ * @desc    Verify mobile OTP
+ * @route   POST /api/auth/otp/verify
+ * @access  Public
+ */
+export const verifyOtp = asyncHandler(async (req, res) => {
+  const { phone, otp } = req.body;
+  if (!phone || !otp) {
+    throw new AppError('Both phone number and OTP are required', 400);
+  }
+  const result = await OtpService.verifyOtp(phone, otp);
+  return successResponse(res, result, 'Mobile OTP verified successfully', 200);
+});
 
 /**
  * @desc    Register a new user (Customer/User, Worker, Cooperative, Admin)
@@ -8,8 +38,33 @@ import { successResponse } from '../utils/apiResponse.js';
  * @access  Public
  */
 export const register = asyncHandler(async (req, res) => {
-  const { name, phone, email, password, role } = req.body;
-  const result = await AuthService.register({ name, phone, email, password, role });
+  const { name, phone, email, password, role, phoneVerified } = req.body;
+
+  // Requirement 2: Email is compulsory
+  if (!email || !email.trim()) {
+    throw new AppError('Email address is required for registration', 400);
+  }
+
+  // Requirement 1: Mobile OTP verification required for USER & WORKER
+  const normalizedRole = (role || 'USER').toUpperCase();
+  const requiresOtp = ['USER', 'CUSTOMER', 'WORKER'].includes(normalizedRole);
+
+  const isVerified = OtpService.isPhoneVerified(phone) || phoneVerified === true;
+  if (requiresOtp && !isVerified) {
+    throw new AppError('Mobile number must be verified via OTP before registration can be completed.', 400);
+  }
+
+  const result = await AuthService.register({
+    name,
+    phone,
+    email,
+    password,
+    role,
+    phoneVerified: isVerified,
+  });
+
+  // Consume token after successful registration
+  OtpService.consumePhoneVerification(phone);
 
   return successResponse(res, result, 'User registered successfully', 201);
 });

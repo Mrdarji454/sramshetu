@@ -61,4 +61,13 @@ router.patch(
 // GET /api/v1/workers/assigned-jobs
 router.get('/assigned-jobs', workerController.getAssignedJobs);
 
+// GET /api/v1/workers/registration-status
+router.get('/registration-status', workerController.getRegistrationStatus);
+
+// POST /api/v1/workers/step/:stepNumber
+router.post('/step/:stepNumber', workerController.saveStep);
+
+// POST /api/v1/workers/submit-registration
+router.post('/submit-registration', workerController.submitRegistration);
+
 export default router;

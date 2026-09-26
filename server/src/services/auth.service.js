@@ -32,7 +32,28 @@ export class AuthService {
   /**
    * Register a new user with hashed password
    */
-  static async register({ name, phone, email, password, role = 'USER' }) {
+  static async register({ name, phone, email, password, role = 'USER', phoneVerified = false }) {
+    if (!name || !name.trim()) {
+      throw new AppError('Please provide a name', 400);
+    }
+    if (!phone || !phone.trim()) {
+      throw new AppError('Please provide a valid phone number', 400);
+    }
+    // Requirement 2: Email is compulsory
+    if (!email || !email.trim()) {
+      throw new AppError('Email address is required for registration', 400);
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new AppError('Please provide a valid email address (e.g. name@domain.com)', 400);
+    }
+
+    if (!password || password.length < 6) {
+      throw new AppError('Password must be at least 6 characters long', 400);
+    }
+
     // Normalize role
     const rawRole = (role || 'USER').toUpperCase();
     const normalizedRole = rawRole === 'CUSTOMER' ? 'USER' : rawRole;
@@ -45,29 +66,62 @@ export class AuthService {
       );
     }
 
+    const cleanPhone = phone.trim();
+
     if (mongoose.connection.readyState === 1) {
       // Check existing phone
-      const existingPhone = await User.findOne({ phone: phone.trim() });
+      const existingPhone = await User.findOne({ phone: cleanPhone });
       if (existingPhone) {
         throw new AppError('A user with this phone number is already registered', 409);
       }
 
-      // Check existing email if provided
-      if (email && email.trim()) {
-        const existingEmail = await User.findOne({ email: email.trim().toLowerCase() });
-        if (existingEmail) {
-          throw new AppError('A user with this email address is already registered', 409);
-        }
+      // Check existing email
+      const existingEmail = await User.findOne({ email: cleanEmail });
+      if (existingEmail) {
+        throw new AppError('A user with this email address is already registered', 409);
       }
 
       // Create user record (pre-save hook hashes password)
       const user = await User.create({
         name: name.trim(),
-        phone: phone.trim(),
-        email: email ? email.trim().toLowerCase() : undefined,
+        phone: cleanPhone,
+        email: cleanEmail,
         password,
         role: normalizedRole,
+        phoneVerified: Boolean(phoneVerified),
       });
+
+      // If registering as WORKER, initialize corresponding Worker profile in DRAFT state
+      if (normalizedRole === 'WORKER') {
+        const { Worker } = await import('../models/Worker.model.js');
+        await Worker.findOneAndUpdate(
+          { user: user._id },
+          {
+            $setOnInsert: {
+              user: user._id,
+              userId: user._id,
+              email: cleanEmail,
+              phone: cleanPhone,
+              name: user.name,
+              phoneVerified: Boolean(phoneVerified),
+              registrationStatus: 'DRAFT',
+              registrationProgress: {
+                currentStep: 1,
+                completedSteps: [1],
+                phoneVerified: Boolean(phoneVerified),
+              },
+              rates: { dailyFloorRate: 800, hourlyRate: 250 },
+              location: {
+                address: { street: '', city: 'Pune', state: 'Maharashtra', pincode: '411001' },
+                workingRadiusKm: 15,
+              },
+              availability: { status: 'available' },
+              verificationStatus: { status: 'pending' },
+            },
+          },
+          { upsert: true, new: true }
+        );
+      }
 
       const token = this.generateToken(user);
 
@@ -76,8 +130,9 @@ export class AuthService {
           id: user._id,
           name: user.name,
           phone: user.phone,
-          email: user.email || null,
+          email: user.email,
           role: user.role,
+          phoneVerified: user.phoneVerified,
           isVerified: user.isVerified,
           profileImage: user.profileImage || null,
           isActive: user.isActive,
@@ -87,15 +142,25 @@ export class AuthService {
       };
     } else {
       // In-memory fallback when MongoDB is not connected (e.g. dev/test mode)
+      const existingPhone = inMemoryUsers.get(cleanPhone);
+      if (existingPhone) {
+        throw new AppError('A user with this phone number is already registered', 409);
+      }
+      const existingEmail = inMemoryUsers.get(cleanEmail);
+      if (existingEmail) {
+        throw new AppError('A user with this email address is already registered', 409);
+      }
+
       const mockId = new mongoose.Types.ObjectId().toString();
       const mockUser = {
         id: mockId,
         _id: mockId,
         name: name.trim(),
-        phone: phone.trim(),
-        email: email ? email.trim().toLowerCase() : null,
+        phone: cleanPhone,
+        email: cleanEmail,
         password,
         role: normalizedRole,
+        phoneVerified: Boolean(phoneVerified),
         isVerified: false,
         profileImage: null,
         isActive: true,
@@ -103,7 +168,35 @@ export class AuthService {
 
       inMemoryUsers.set(mockId, mockUser);
       inMemoryUsers.set(mockUser.phone, mockUser);
-      if (mockUser.email) inMemoryUsers.set(mockUser.email, mockUser);
+      inMemoryUsers.set(mockUser.email, mockUser);
+
+      // If WORKER, seed in-memory worker in DRAFT mode
+      if (normalizedRole === 'WORKER') {
+        const { inMemoryWorkers } = await import('./worker.service.js');
+        inMemoryWorkers.set(mockId, {
+          id: mockId,
+          _id: mockId,
+          user: mockId,
+          userId: mockId,
+          name: mockUser.name,
+          phone: mockUser.phone,
+          email: cleanEmail,
+          phoneVerified: Boolean(phoneVerified),
+          registrationStatus: 'DRAFT',
+          registrationProgress: {
+            currentStep: 1,
+            completedSteps: [1],
+            phoneVerified: Boolean(phoneVerified),
+          },
+          rates: { dailyFloorRate: 800, hourlyRate: 250 },
+          location: {
+            address: { street: '', city: 'Pune', state: 'Maharashtra', pincode: '411001' },
+            workingRadiusKm: 15,
+          },
+          availability: { status: 'available' },
+          verificationStatus: { status: 'pending' },
+        });
+      }
 
       const safeUser = { ...mockUser };
       delete safeUser.password;

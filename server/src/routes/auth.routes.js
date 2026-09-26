@@ -18,6 +18,27 @@ const validRoles = [
   'customer',
 ];
 
+// POST /api/auth/otp/send
+router.post(
+  '/otp/send',
+  [
+    body('phone').trim().notEmpty().withMessage('Phone number is required'),
+    validate,
+  ],
+  authController.sendOtp
+);
+
+// POST /api/auth/otp/verify
+router.post(
+  '/otp/verify',
+  [
+    body('phone').trim().notEmpty().withMessage('Phone number is required'),
+    body('otp').trim().notEmpty().withMessage('OTP is required'),
+    validate,
+  ],
+  authController.verifyOtp
+);
+
 // POST /api/auth/register
 router.post(
   '/register',

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { LandingPage } from '../features/landing/LandingPage';
 import { LoginPage } from '../features/auth/LoginPage';
@@ -12,9 +12,70 @@ import { AdminDashboard } from '../features/admin/AdminDashboard';
 import { WorkerOnboardingWizard } from '../features/worker/WorkerOnboardingWizard';
 import { CooperativeOnboardingWizard } from '../features/cooperative/CooperativeOnboardingWizard';
 import { AdminVerificationManager } from '../features/admin/AdminVerificationManager';
+import { RegistrationPendingPage } from '../features/worker/RegistrationPendingPage';
 import { DashboardLayout } from '../layouts/DashboardLayout';
+import workerService from '../services/worker.service';
 
 function WorkerOnboardingPage() {
+  const [loading, setLoading] = useState(true);
+  const [workerStatus, setWorkerStatus] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function checkStatus() {
+      try {
+        const res = await workerService.getRegistrationStatus();
+        if (!isMounted) return;
+        setWorkerStatus(res);
+
+        const isVer = Boolean(
+          res?.isVerified ||
+          res?.registrationStatus === 'APPROVED' ||
+          String(res?.verificationStatus?.status || res?.verificationStatus || '').toLowerCase() === 'verified'
+        );
+
+        if (isVer) {
+          navigate('/worker/dashboard', { replace: true });
+          return;
+        }
+
+        if (res?.registrationStatus === 'PENDING_APPROVAL' || res?.registrationStatus === 'PENDING_ADMIN_APPROVAL') {
+          navigate('/registration-pending', { replace: true });
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to check onboarding status:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    checkStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Worker Profile & KYC" roleBadge="Worker">
+        <div className="flex items-center justify-center p-16">
+          <div className="w-8 h-8 rounded-full border-2 border-brand-saffron-500 border-t-transparent animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const isVerified = Boolean(
+    workerStatus?.isVerified ||
+    workerStatus?.registrationStatus === 'APPROVED' ||
+    String(workerStatus?.verificationStatus?.status || workerStatus?.verificationStatus || '').toLowerCase() === 'verified'
+  );
+
+  if (isVerified) {
+    return <Navigate to="/worker/dashboard" replace />;
+  }
+
   return (
     <DashboardLayout
       title="Worker Profile & KYC Onboarding"
@@ -59,6 +120,16 @@ export function AppRoutes() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
+      {/* Requirement 10: Dedicated Worker Registration Pending Page */}
+      <Route
+        path="/registration-pending"
+        element={
+          <ProtectedRoute allowedRoles={['WORKER']}>
+            <RegistrationPendingPage />
+          </ProtectedRoute>
+        }
+      />
+
       {/* Role Protected Routes */}
       {/* 1. USER -> /user/dashboard */}
       <Route
@@ -88,7 +159,7 @@ export function AppRoutes() {
         }
       />
 
-      {/* 3. WORKER -> /worker/dashboard & /worker/onboarding */}
+      {/* 3. WORKER -> /worker/dashboard, /worker/onboarding & registration aliases */}
       <Route
         path="/worker/dashboard"
         element={
@@ -105,6 +176,10 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      {/* Requirement 10: Automatic aliases for worker registration URLs */}
+      <Route path="/worker/register" element={<Navigate to="/worker/onboarding" replace />} />
+      <Route path="/worker/registration" element={<Navigate to="/worker/onboarding" replace />} />
+      <Route path="/worker/profile-setup" element={<Navigate to="/worker/onboarding" replace />} />
 
       {/* 4. ADMIN -> /admin/dashboard & /admin/verifications */}
       <Route

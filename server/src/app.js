@@ -31,6 +31,11 @@ app.get('/', (req, res) => {
   });
 });
 
+// Ignore browser favicon requests to avoid noisy 404 logs
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
 // 5. Catch-all for unhandled routes (404)
 app.all('*', (req, res, next) => {
   next(new AppError(`Cannot find ${req.originalUrl} on this server`, 404));

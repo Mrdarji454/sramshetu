@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "../../layouts/DashboardLayout";
 import { useAuth } from "../../context/AuthContext";
 import workerService from "../../services/worker.service";
 import { bookingService } from "../../services/booking.service";
 import { WorkerOnboardingWizard } from "./WorkerOnboardingWizard";
+import { VerifiedDashboard } from "./VerifiedDashboard";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -33,6 +35,7 @@ import {
 
 export function WorkerDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview"); // 'overview' or 'onboarding'
   const [profile, setProfile] = useState(null);
   const [verification, setVerification] = useState(null);
@@ -54,11 +57,32 @@ export function WorkerDashboard() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [profData, verData, jobsData] = await Promise.allSettled([
+      const [regData, profData, verData, jobsData] = await Promise.allSettled([
+        workerService.getRegistrationStatus(),
         workerService.getProfile(),
         workerService.getVerificationStatus(),
         bookingService.getBookings({ role: "worker" }),
       ]);
+
+      if (regData.status === "fulfilled" && regData.value) {
+        const isWorkerVerified = Boolean(
+          regData.value.isVerified ||
+          regData.value.registrationStatus === "APPROVED" ||
+          String(regData.value.verificationStatus || "").toLowerCase() === "verified",
+        );
+
+        if (!isWorkerVerified) {
+          const regStatus = regData.value.registrationStatus;
+          if (regStatus === "PENDING_APPROVAL" || regStatus === "PENDING_ADMIN_APPROVAL") {
+            navigate("/registration-pending", { replace: true });
+            return;
+          }
+          if (regStatus === "DRAFT") {
+            navigate("/worker/onboarding", { replace: true });
+            return;
+          }
+        }
+      }
 
       if (profData.status === "fulfilled" && profData.value) {
         setProfile(profData.value);
@@ -81,7 +105,7 @@ export function WorkerDashboard() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [navigate]);
 
   const handleToggleAvailability = async () => {
     const nextStatus = isAvailable ? "offline" : "available";
@@ -210,8 +234,18 @@ export function WorkerDashboard() {
     }
   };
 
-  const isVerified = verification?.status === "verified";
-  const isRejected = verification?.status === "rejected";
+  const isVerified = Boolean(
+    verification?.isVerified ||
+    profile?.isVerified ||
+    String(verification?.status || "").toLowerCase() === "verified" ||
+    profile?.registrationStatus === "APPROVED" ||
+    profile?.verificationStatus?.status === "verified"
+  );
+  const isRejected = Boolean(
+    String(verification?.status || "").toLowerCase() === "rejected" ||
+    profile?.registrationStatus === "REJECTED" ||
+    profile?.verificationStatus?.status === "rejected"
+  );
 
   // Calculate earnings
   const completedJobs = assignedJobs.filter(
@@ -285,19 +319,17 @@ export function WorkerDashboard() {
                 : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
             }`}
           >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>Onboarding Profile & KYC</span>
-            {verification && (
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isVerified
-                    ? "bg-emerald-400"
-                    : isRejected
-                      ? "bg-red-400"
-                      : "bg-amber-400"
-                }`}
-              />
+            {isVerified ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <Edit3 className="w-3.5 h-3.5" />
             )}
+            <span>{isVerified ? "Verified Profile & KYC" : "Onboarding Profile & KYC"}</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isVerified ? "bg-emerald-400" : isRejected ? "bg-red-400" : "bg-amber-400"
+              }`}
+            />
           </button>
         </div>
 
@@ -358,6 +390,44 @@ export function WorkerDashboard() {
       {/* Tab 1: Overview Dashboard */}
       {activeTab === "overview" && (
         <>
+          {/* Large Green Verified Banner on Overview */}
+          {isVerified && (
+            <div className="mb-6 p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-800 text-white shadow-md border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white flex-shrink-0 border border-white/20">
+                  <ShieldCheck className="w-7 h-7 text-emerald-200" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-extrabold font-display">
+                      Your KYC has been approved.
+                    </h3>
+                    <Badge variant="verified" size="sm" className="bg-emerald-500/30 text-emerald-100 border-emerald-400/40">
+                      NSDC VERIFIED
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-emerald-100/90 mt-1">
+                    Worker ID: <strong className="font-mono text-white">WRK-{(profile?._id || profile?.id || '65F12345').toString().slice(-8).toUpperCase()}</strong> •
+                    Cooperative: <strong className="text-white">{profile?.cooperative?.name || profile?.cooperative || 'Pune Shramik Vikas Sahakari'}</strong> •
+                    Approved on {new Date(verification?.verifiedAt || profile?.verificationStatus?.verifiedAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('onboarding')}
+                  className="bg-white text-emerald-950 border-white hover:bg-emerald-50 text-xs font-bold whitespace-nowrap shadow-sm"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 mr-1" />
+                  View Credentials & ID
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Availability Status Banner */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
@@ -748,15 +818,23 @@ export function WorkerDashboard() {
         </>
       )}
 
-      {/* Tab 2: Onboarding Wizard */}
-      {activeTab === "onboarding" && (
-        <WorkerOnboardingWizard
-          onComplete={() => {
-            loadData();
-            setActiveTab("overview");
-          }}
-        />
-      )}
+      {/* Tab 2: Verified Dashboard or Onboarding Wizard */}
+      {activeTab === "onboarding" &&
+        (isVerified ? (
+          <VerifiedDashboard
+            profile={profile}
+            verification={verification}
+            onViewJobs={() => setActiveTab("overview")}
+            onRefresh={loadData}
+          />
+        ) : (
+          <WorkerOnboardingWizard
+            onComplete={() => {
+              loadData();
+              setActiveTab("overview");
+            }}
+          />
+        ))}
 
       {/* MODAL 1: OTP ARRIVAL VERIFICATION HANDSHAKE */}
       {otpModalJob && (

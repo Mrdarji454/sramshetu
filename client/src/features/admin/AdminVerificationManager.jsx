@@ -274,39 +274,73 @@ export function AdminVerificationManager() {
                         </Badge>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-1 gap-x-4 text-xs text-slate-600 mt-2 font-medium">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-1.5 gap-x-4 text-xs text-slate-600 mt-2 font-medium">
                         <div>
-                          <span className="text-slate-400">Jurisdiction:</span> {item.district}, {item.state}
+                          <span className="text-slate-400">Jurisdiction:</span> {item.district}, {item.state} {item.address?.pincode ? `(${item.address.pincode})` : ''}
                         </div>
                         <div>
-                          <span className="text-slate-400">Sector/Trade:</span> {item.tradeOrServices}
+                          <span className="text-slate-400">Profession:</span> <strong className="text-slate-800">{item.customProfession || item.profession || item.tradeOrServices}</strong>
                         </div>
+                        {item.email && item.email !== 'N/A' && (
+                          <div>
+                            <span className="text-slate-400">Email:</span> {item.email}
+                          </div>
+                        )}
+                        {item.phone && (
+                          <div className="font-mono flex items-center gap-1.5">
+                            <span className="text-slate-400 font-sans">Contact:</span> {item.phone}
+                            {item.phoneVerified && (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1 rounded font-semibold border border-emerald-200">
+                                Verified ✓
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {item.registrationNumber && (
                           <div className="font-mono">
                             <span className="text-slate-400 font-sans">Reg No:</span> {item.registrationNumber}
                           </div>
                         )}
-                        {item.phone && (
-                          <div className="font-mono">
-                            <span className="text-slate-400 font-sans">Contact:</span> {item.phone}
-                          </div>
-                        )}
-                        {item.experienceYears !== undefined && (
+                        <div>
+                          <span className="text-slate-400">Cooperative Society:</span>{' '}
+                          <strong className={item.cooperativeName?.includes('None') || item.cooperativeName?.includes('Independent') ? 'text-slate-500' : 'text-indigo-900'}>
+                            {item.cooperativeName || 'Independent / None'}
+                          </strong>
+                        </div>
+                        {item.eshramProvided !== undefined && (
                           <div>
-                            <span className="text-slate-400">Experience:</span> {item.experienceYears} Years
-                          </div>
-                        )}
-                        {item.cooperativeName && (
-                          <div>
-                            <span className="text-slate-400">Guild:</span> {item.cooperativeName}
+                            <span className="text-slate-400">e-Shram Status:</span>{' '}
+                            <span className={item.eshramProvided ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
+                              {item.eshramProvided ? 'Verified & Provided ✓' : 'Pending / Missing'}
+                            </span>
                           </div>
                         )}
                       </div>
 
+                      {/* Per-Skill Experience and Service Radius Details */}
+                      {Array.isArray(item.skills) && item.skills.length > 0 && (
+                        <div className="mt-3 pt-2 border-t border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                            Skills, Experience & Service Radius ({item.skills.length}):
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.skills.map((s, sIdx) => (
+                              <span
+                                key={sIdx}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-700"
+                              >
+                                <strong className="text-slate-900">{s.skillName || s.name}</strong>
+                                <span className="text-slate-400">({s.experienceYears ?? s.years ?? 0} yrs • {s.serviceRadiusKm ?? s.radius ?? 15} km)</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Documents Section */}
                       {item.documents?.length > 0 && (
-                        <div className="mt-4 pt-3 border-t border-slate-100">
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                        <div className="mt-3 pt-2 border-t border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
                             Submitted Verification Documents ({item.documents.length}):
                           </span>
                           <div className="flex flex-wrap items-center gap-2">

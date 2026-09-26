@@ -10,7 +10,31 @@ export const workerService = {
   },
 
   /**
-   * Save / update onboarding steps
+   * Get registration status & step progress
+   */
+  async getRegistrationStatus() {
+    const response = await apiClient.get('/workers/registration-status');
+    return response.data || response;
+  },
+
+  /**
+   * Save and validate specific registration step
+   */
+  async saveStep(stepNumber, stepData) {
+    const response = await apiClient.post(`/workers/step/${stepNumber}`, stepData);
+    return response.data || response;
+  },
+
+  /**
+   * Submit registration for admin review (locks registration)
+   */
+  async submitRegistration() {
+    const response = await apiClient.post('/workers/submit-registration');
+    return response.data || response;
+  },
+
+  /**
+   * Save / update onboarding steps (backward compatibility)
    */
   async saveOnboarding(data) {
     const response = await apiClient.post('/workers/onboarding', data);
@@ -51,4 +75,3 @@ export const workerService = {
 };
 
 export default workerService;
-
