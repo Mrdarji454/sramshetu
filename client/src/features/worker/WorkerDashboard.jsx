@@ -68,12 +68,16 @@ export function WorkerDashboard() {
         const isWorkerVerified = Boolean(
           regData.value.isVerified ||
           regData.value.registrationStatus === "APPROVED" ||
-          String(regData.value.verificationStatus || "").toLowerCase() === "verified",
+          String(regData.value.verificationStatus || "").toLowerCase() ===
+            "verified",
         );
 
         if (!isWorkerVerified) {
           const regStatus = regData.value.registrationStatus;
-          if (regStatus === "PENDING_APPROVAL" || regStatus === "PENDING_ADMIN_APPROVAL") {
+          if (
+            regStatus === "PENDING_APPROVAL" ||
+            regStatus === "PENDING_ADMIN_APPROVAL"
+          ) {
             navigate("/registration-pending", { replace: true });
             return;
           }
@@ -239,12 +243,12 @@ export function WorkerDashboard() {
     profile?.isVerified ||
     String(verification?.status || "").toLowerCase() === "verified" ||
     profile?.registrationStatus === "APPROVED" ||
-    profile?.verificationStatus?.status === "verified"
+    profile?.verificationStatus?.status === "verified",
   );
   const isRejected = Boolean(
     String(verification?.status || "").toLowerCase() === "rejected" ||
     profile?.registrationStatus === "REJECTED" ||
-    profile?.verificationStatus?.status === "rejected"
+    profile?.verificationStatus?.status === "rejected",
   );
 
   // Calculate earnings
@@ -324,10 +328,18 @@ export function WorkerDashboard() {
             ) : (
               <Edit3 className="w-3.5 h-3.5" />
             )}
-            <span>{isVerified ? "Verified Profile & KYC" : "Onboarding Profile & KYC"}</span>
+            <span>
+              {isVerified
+                ? "Verified Profile & KYC"
+                : "Onboarding Profile & KYC"}
+            </span>
             <span
               className={`w-2 h-2 rounded-full ${
-                isVerified ? "bg-emerald-400" : isRejected ? "bg-red-400" : "bg-amber-400"
+                isVerified
+                  ? "bg-emerald-400"
+                  : isRejected
+                    ? "bg-red-400"
+                    : "bg-amber-400"
               }`}
             />
           </button>
@@ -402,14 +414,39 @@ export function WorkerDashboard() {
                     <h3 className="text-base sm:text-lg font-extrabold font-display">
                       Your KYC has been approved.
                     </h3>
-                    <Badge variant="verified" size="sm" className="bg-emerald-500/30 text-emerald-100 border-emerald-400/40">
+                    <Badge
+                      variant="verified"
+                      size="sm"
+                      className="bg-emerald-500/30 text-emerald-100 border-emerald-400/40"
+                    >
                       NSDC VERIFIED
                     </Badge>
                   </div>
                   <p className="text-xs text-emerald-100/90 mt-1">
-                    Worker ID: <strong className="font-mono text-white">WRK-{(profile?._id || profile?.id || '65F12345').toString().slice(-8).toUpperCase()}</strong> •
-                    Cooperative: <strong className="text-white">{profile?.cooperative?.name || profile?.cooperative || 'Pune Shramik Vikas Sahakari'}</strong> •
-                    Approved on {new Date(verification?.verifiedAt || profile?.verificationStatus?.verifiedAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    Worker ID:{" "}
+                    <strong className="font-mono text-white">
+                      WRK-
+                      {(profile?._id || profile?.id || "65F12345")
+                        .toString()
+                        .slice(-8)
+                        .toUpperCase()}
+                    </strong>{" "}
+                    • Cooperative:{" "}
+                    <strong className="text-white">
+                      {profile?.cooperative?.name ||
+                        profile?.cooperative ||
+                        "Pune Shramik Vikas Sahakari"}
+                    </strong>{" "}
+                    • Approved on{" "}
+                    {new Date(
+                      verification?.verifiedAt ||
+                        profile?.verificationStatus?.verifiedAt ||
+                        Date.now(),
+                    ).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
                   </p>
                 </div>
               </div>
@@ -418,7 +455,7 @@ export function WorkerDashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setActiveTab('onboarding')}
+                  onClick={() => setActiveTab("onboarding")}
                   className="bg-white text-emerald-950 border-white hover:bg-emerald-50 text-xs font-bold whitespace-nowrap shadow-sm"
                 >
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 mr-1" />
@@ -981,10 +1018,23 @@ export function WorkerDashboard() {
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
                   Completion Summary & Notes
                 </label>
-                <label className="block text-sm font-semibold mb-3">Completion code
-                    <input aria-label="Completion OTP" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={enteredOtp} onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))} placeholder="6-digit customer code" className="mt-2 w-full rounded-xl border p-3 font-mono" />
-                  </label>
-                  <textarea
+                <label className="block text-sm font-semibold mb-3">
+                  Completion code
+                  <input
+                    aria-label="Completion OTP"
+                    required
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    value={enteredOtp}
+                    onChange={(e) =>
+                      setEnteredOtp(e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="6-digit customer code"
+                    className="mt-2 w-full rounded-xl border p-3 font-mono"
+                  />
+                </label>
+                <textarea
                   rows={3}
                   placeholder="e.g. Completed fault diagnostics, installed new circuit breaker, tested load balance to customer satisfaction."
                   value={completionNote}

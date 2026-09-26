@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuth, getRoleDashboardPath } from '../../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import { Logo } from '../../components/common/Logo';
-import { Button } from '../../components/ui/Button';
+import React, { useState, useEffect, useRef } from "react";
+import { useAuth, getRoleDashboardPath } from "../../context/AuthContext";
+import { useNavigate, Link } from "react-router-dom";
+import { Logo } from "../../components/common/Logo";
+import { Button } from "../../components/ui/Button";
 import {
   User,
   Phone,
@@ -20,15 +20,15 @@ import {
   ShieldCheck,
   Copy,
   X,
-} from 'lucide-react';
-import { otpService } from '../../services/otp.service';
+} from "lucide-react";
+import { otpService } from "../../services/otp.service";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /** Strip all non-digit chars and return just digits */
-const digitsOnly = (v) => v.replace(/\D/g, '');
+const digitsOnly = (v) => v.replace(/\D/g, "");
 
 /** Return true for a 10-digit Indian mobile (starts 6-9) */
 const isValidPhone = (v) => /^[6-9]\d{9}$/.test(digitsOnly(v));
@@ -37,7 +37,7 @@ const isValidPhone = (v) => /^[6-9]\d{9}$/.test(digitsOnly(v));
 const normalisePhone = (v) => {
   const d = digitsOnly(v);
   if (d.length === 10) return `+91${d}`;
-  if (d.length === 12 && d.startsWith('91')) return `+${d}`;
+  if (d.length === 12 && d.startsWith("91")) return `+${d}`;
   return d;
 };
 
@@ -53,22 +53,22 @@ export function RegisterPage() {
 
   // ── form fields ────────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    password: '',
-    role: 'USER',
+    name: "",
+    phone: "",
+    email: "",
+    password: "",
+    role: "USER",
   });
 
   // ── OTP state ──────────────────────────────────────────────────────────────
   const [otpSent, setOtpSent] = useState(false);
-  const [otpValue, setOtpValue] = useState('');
+  const [otpValue, setOtpValue] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
-  const [otpError, setOtpError] = useState('');
-  const [debugOtp, setDebugOtp] = useState(''); // dev-mode hint
+  const [otpError, setOtpError] = useState("");
+  const [debugOtp, setDebugOtp] = useState(""); // dev-mode hint
 
   // ── demo OTP toast (dev/demo only) ────────────────────────────────────────
   const [showDemoOtp, setShowDemoOtp] = useState(false);
@@ -78,14 +78,17 @@ export function RegisterPage() {
   const countdownRef = useRef(null);
 
   // ── general form state ─────────────────────────────────────────────────────
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ── cleanup timers on unmount ─────────────────────────────────────────────
-  useEffect(() => () => {
-    clearInterval(countdownRef.current);
-    clearTimeout(demoOtpTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      clearInterval(countdownRef.current);
+      clearTimeout(demoOtpTimerRef.current);
+    },
+    [],
+  );
 
   /** Hide the demo OTP toast and cancel its auto-hide timer */
   const dismissDemoToast = () => {
@@ -96,9 +99,24 @@ export function RegisterPage() {
 
   // ── role definitions ───────────────────────────────────────────────────────
   const roles = [
-    { id: 'USER', label: 'Customer / Business', icon: Users, desc: 'Book verified artisans with escrow protection' },
-    { id: 'WORKER', label: 'Worker / Shramik', icon: HardHat, desc: '100% direct payouts, zero middleman cut' },
-    { id: 'COOPERATIVE', label: 'Cooperative Society', icon: Building2, desc: 'Manage member roster & welfare fund' },
+    {
+      id: "USER",
+      label: "Customer / Business",
+      icon: Users,
+      desc: "Book verified artisans with escrow protection",
+    },
+    {
+      id: "WORKER",
+      label: "Worker / Shramik",
+      icon: HardHat,
+      desc: "100% direct payouts, zero middleman cut",
+    },
+    {
+      id: "COOPERATIVE",
+      label: "Cooperative Society",
+      icon: Building2,
+      desc: "Manage member roster & welfare fund",
+    },
   ];
 
   // ── derived validation ─────────────────────────────────────────────────────
@@ -107,23 +125,24 @@ export function RegisterPage() {
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim());
   const nameOk = formData.name.trim().length >= 3;
   const passwordOk = formData.password.length >= 8;
-  const canRegister = nameOk && emailOk && phoneOk && phoneVerified && passwordOk;
+  const canRegister =
+    nameOk && emailOk && phoneOk && phoneVerified && passwordOk;
 
   // ── handlers ───────────────────────────────────────────────────────────────
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    setFormError('');
+    setFormError("");
     clearError();
 
     // If phone is edited after OTP was sent/verified, reset OTP state
-    if (name === 'phone') {
+    if (name === "phone") {
       setOtpSent(false);
-      setOtpValue('');
+      setOtpValue("");
       setPhoneVerified(false);
-      setOtpError('');
-      setDebugOtp('');
+      setOtpError("");
+      setDebugOtp("");
       setResendCountdown(0);
       clearInterval(countdownRef.current);
     }
@@ -144,9 +163,9 @@ export function RegisterPage() {
   };
 
   const handleSendOtp = async () => {
-    setOtpError('');
+    setOtpError("");
     if (!phoneOk) {
-      setOtpError('Enter a valid 10-digit Indian mobile number first.');
+      setOtpError("Enter a valid 10-digit Indian mobile number first.");
       return;
     }
     setSendingOtp(true);
@@ -163,25 +182,33 @@ export function RegisterPage() {
         demoOtpTimerRef.current = setTimeout(dismissDemoToast, 10_000);
       }
     } catch (err) {
-      setOtpError(err?.response?.data?.message || err?.message || 'Failed to send OTP. Please try again.');
+      setOtpError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to send OTP. Please try again.",
+      );
     } finally {
       setSendingOtp(false);
     }
   };
 
   const handleVerifyOtp = async () => {
-    setOtpError('');
+    setOtpError("");
     if (otpValue.length !== 6) {
-      setOtpError('Enter the 6-digit OTP sent to your number.');
+      setOtpError("Enter the 6-digit OTP sent to your number.");
       return;
     }
     setVerifyingOtp(true);
     try {
       await otpService.verifyOtp(normalisePhone(formData.phone), otpValue);
       setPhoneVerified(true);
-      setOtpError('');
+      setOtpError("");
     } catch (err) {
-      setOtpError(err?.response?.data?.message || err?.message || 'Invalid or expired OTP. Please try again.');
+      setOtpError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Invalid or expired OTP. Please try again.",
+      );
     } finally {
       setVerifyingOtp(false);
     }
@@ -189,20 +216,38 @@ export function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setFormError('');
+    setFormError("");
     clearError();
 
-    if (!nameOk) { setFormError('Full name must be at least 3 characters.'); return; }
-    if (!emailOk) { setFormError('Please enter a valid email address.'); return; }
-    if (!phoneOk) { setFormError('Please enter a valid 10-digit mobile number.'); return; }
-    if (!phoneVerified) { setFormError('Please verify your mobile number via OTP before registering.'); return; }
-    if (!passwordOk) { setFormError('Password must be at least 8 characters.'); return; }
+    if (!nameOk) {
+      setFormError("Full name must be at least 3 characters.");
+      return;
+    }
+    if (!emailOk) {
+      setFormError("Please enter a valid email address.");
+      return;
+    }
+    if (!phoneOk) {
+      setFormError("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    if (!phoneVerified) {
+      setFormError(
+        "Please verify your mobile number via OTP before registering.",
+      );
+      return;
+    }
+    if (!passwordOk) {
+      setFormError("Password must be at least 8 characters.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const newUser = await register({
         name: formData.name.trim(),
         phone: normalisePhone(formData.phone),
+        phoneVerified,
         email: formData.email.trim(),
         password: formData.password,
         role: formData.role,
@@ -210,7 +255,7 @@ export function RegisterPage() {
       const targetPath = getRoleDashboardPath(newUser.role);
       navigate(targetPath, { replace: true });
     } catch (err) {
-      setFormError(err.message || 'Registration failed. Please try again.');
+      setFormError(err.message || "Registration failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -263,7 +308,9 @@ export function RegisterPage() {
               ) : (
                 <Copy className="w-4 h-4" />
               )}
-              <span className="text-[9px] font-bold">{otpCopied ? 'Copied!' : 'Copy'}</span>
+              <span className="text-[9px] font-bold">
+                {otpCopied ? "Copied!" : "Copy"}
+              </span>
             </button>
 
             {/* Dismiss button */}
@@ -281,7 +328,7 @@ export function RegisterPage() {
           <div className="mt-1 h-0.5 bg-amber-200 rounded-full overflow-hidden mx-1">
             <div
               className="h-full bg-amber-400 rounded-full"
-              style={{ animation: 'shrink-x 10s linear forwards' }}
+              style={{ animation: "shrink-x 10s linear forwards" }}
             />
           </div>
         </div>
@@ -289,7 +336,9 @@ export function RegisterPage() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-lg">
         <div className="flex justify-center mb-4">
-          <Link to="/"><Logo size="lg" showTagline={true} /></Link>
+          <Link to="/">
+            <Logo size="lg" showTagline={true} />
+          </Link>
         </div>
         <h2 className="text-center text-2xl sm:text-3xl font-extrabold text-brand-navy-900 font-display">
           Create Your ShramSetu Account
@@ -301,7 +350,6 @@ export function RegisterPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg px-4 sm:px-0">
         <div className="bg-white py-8 px-6 sm:px-10 rounded-2xl border border-slate-200 shadow-xl">
-
           {/* Error Banner */}
           {displayError && (
             <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 animate-in fade-in">
@@ -311,7 +359,6 @@ export function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-
             {/* ── Role Picker ── */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
@@ -328,16 +375,22 @@ export function RegisterPage() {
                       onClick={() => setFormData((p) => ({ ...p, role: r.id }))}
                       className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
                         isSelected
-                          ? 'border-brand-saffron-500 bg-brand-saffron-50/50 ring-2 ring-brand-saffron-500/20'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                          ? "border-brand-saffron-500 bg-brand-saffron-50/50 ring-2 ring-brand-saffron-500/20"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
                       }`}
                     >
-                      <Icon className={`w-5 h-5 mb-2 ${isSelected ? 'text-brand-saffron-600' : 'text-slate-500'}`} />
+                      <Icon
+                        className={`w-5 h-5 mb-2 ${isSelected ? "text-brand-saffron-600" : "text-slate-500"}`}
+                      />
                       <div>
-                        <span className={`block text-xs font-bold ${isSelected ? 'text-brand-saffron-950' : 'text-slate-800'}`}>
-                          {r.label.split('/')[0]}
+                        <span
+                          className={`block text-xs font-bold ${isSelected ? "text-brand-saffron-950" : "text-slate-800"}`}
+                        >
+                          {r.label.split("/")[0]}
                         </span>
-                        <span className="text-[10px] text-slate-500 line-clamp-2 mt-0.5">{r.desc}</span>
+                        <span className="text-[10px] text-slate-500 line-clamp-2 mt-0.5">
+                          {r.desc}
+                        </span>
                       </div>
                     </button>
                   );
@@ -383,8 +436,8 @@ export function RegisterPage() {
                     maxLength={15}
                     className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none bg-slate-50/50 focus:bg-white transition-colors ${
                       phoneVerified
-                        ? 'border-green-400 bg-green-50/50 text-green-800'
-                        : 'border-slate-200'
+                        ? "border-green-400 bg-green-50/50 text-green-800"
+                        : "border-slate-200"
                     }`}
                   />
                   {phoneVerified && (
@@ -410,7 +463,7 @@ export function RegisterPage() {
                     ) : (
                       <>
                         <Send className="w-3.5 h-3.5" />
-                        {otpSent ? 'Resend' : 'Send OTP'}
+                        {otpSent ? "Resend" : "Send OTP"}
                       </>
                     )}
                   </button>
@@ -429,7 +482,7 @@ export function RegisterPage() {
                     onChange={(e) => {
                       const v = digitsOnly(e.target.value).slice(0, 6);
                       setOtpValue(v);
-                      setOtpError('');
+                      setOtpError("");
                     }}
                     placeholder="Enter 6-digit OTP"
                     className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono font-medium tracking-widest focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none bg-slate-50/50 focus:bg-white"
@@ -452,7 +505,6 @@ export function RegisterPage() {
                 </div>
               )}
 
-
               {/* OTP success badge */}
               {phoneVerified && (
                 <p className="mt-1.5 flex items-center gap-1 text-[11px] text-green-600 font-semibold">
@@ -472,7 +524,7 @@ export function RegisterPage() {
               {/* Resend prompt */}
               {otpSent && !phoneVerified && resendCountdown === 0 && (
                 <p className="mt-1 text-[10px] text-slate-500">
-                  Didn't receive it?{' '}
+                  Didn't receive it?{" "}
                   <button
                     type="button"
                     onClick={handleSendOtp}
@@ -533,16 +585,16 @@ export function RegisterPage() {
                 className="w-full py-3"
                 icon={isSubmitting ? Loader2 : ArrowRight}
               >
-                {isSubmitting ? 'Registering…' : `Join as ${formData.role}`}
+                {isSubmitting ? "Registering…" : `Join as ${formData.role}`}
               </Button>
 
               {/* Hint strip: shows which fields still need attention */}
               {!canRegister && (
                 <p className="mt-2 text-[10px] text-center text-slate-400">
-                  {!nameOk && 'Name · '}
-                  {!emailOk && 'Email · '}
-                  {!phoneVerified && 'Mobile OTP · '}
-                  {!passwordOk && 'Password (8+ chars) · '}
+                  {!nameOk && "Name · "}
+                  {!emailOk && "Email · "}
+                  {!phoneVerified && "Mobile OTP · "}
+                  {!passwordOk && "Password (8+ chars) · "}
                   required to continue
                 </p>
               )}
@@ -550,8 +602,11 @@ export function RegisterPage() {
           </form>
 
           <div className="mt-6 text-center text-xs text-slate-500">
-            Already have an account?{' '}
-            <Link to="/login" className="font-bold text-brand-saffron-600 hover:underline">
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              className="font-bold text-brand-saffron-600 hover:underline"
+            >
               Sign In
             </Link>
           </div>
