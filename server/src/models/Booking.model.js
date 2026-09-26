@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
 
+const workOtpSchema = new mongoose.Schema({
+  salt: String, hash: String, issuedAt: Date, expiresAt: Date,
+  attempts: { type: Number, default: 0 }, usedAt: { type: Date, default: null },
+}, { _id: false });
+
 const bookingSchema = new mongoose.Schema(
   {
     customer: {
@@ -31,6 +36,12 @@ const bookingSchema = new mongoose.Schema(
       index: true,
       alias: 'serviceId',
     },
+    customerName: String,
+    customerPhone: String,
+    customerEmail: String,
+    workerName: String,
+    workerPhone: String,
+    cooperativeName: String,
     serviceName: {
       type: String,
       required: [true, 'Service name is required'],
@@ -41,6 +52,20 @@ const bookingSchema = new mongoose.Schema(
       required: [true, 'Trade classification is required'],
       trim: true,
       index: true,
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    workType: {
+      type: String,
+      trim: true,
+      default: 'Repair & Troubleshooting',
+    },
+    photos: {
+      type: [String],
+      default: [],
     },
     location: {
       type: {
@@ -146,6 +171,12 @@ const bookingSchema = new mongoose.Schema(
       isVerified: { type: Boolean, default: false },
       verifiedAt: { type: Date, default: null },
     },
+    trackingStatus: { type: String, default: null },
+    customerLocation: { type: [Number], default: undefined },
+    workerLocation: { coordinates: { type: [Number], default: undefined }, updatedAt: Date, source: String },
+    startOTP: { type: workOtpSchema, default: undefined },
+    endOTP: { type: workOtpSchema, default: undefined },
+    timelineEvents: [{ status: String, updatedBy: mongoose.Schema.Types.ObjectId, role: String, timestamp: Date, note: String }],
     specialInstructions: {
       type: String,
       trim: true,

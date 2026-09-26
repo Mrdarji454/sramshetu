@@ -73,5 +73,10 @@ router.post(
   bookingController.rejectBooking
 );
 
+router.post('/:id/start-otp', authorizeRoles('user'), bookingController.issueOtp('start'));
+router.post('/:id/end-otp', authorizeRoles('user'), bookingController.issueOtp('end'));
+router.post('/:id/verify-start-otp', authorizeRoles('worker'), bookingController.verifyOtp('start'));
+router.post('/:id/verify-end-otp', authorizeRoles('worker'), bookingController.verifyOtp('end'));
+
 export default router;
 

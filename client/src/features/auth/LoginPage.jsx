@@ -30,7 +30,8 @@ export function LoginPage() {
   // If already authenticated, redirect to role dashboard
   useEffect(() => {
     if (isAuthenticated && user) {
-      const fromPath = location.state?.from?.pathname;
+      const from = location.state?.from;
+      const fromPath = from?.pathname ? `${from.pathname}${from.search || ''}${from.hash || ''}` : null;
       const targetPath = fromPath || getRoleDashboardPath(user.role);
       navigate(targetPath, { replace: true });
     }
@@ -49,7 +50,8 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       const loggedUser = await login(identifier.trim(), password);
-      const fromPath = location.state?.from?.pathname;
+      const from = location.state?.from;
+      const fromPath = from?.pathname ? `${from.pathname}${from.search || ''}${from.hash || ''}` : null;
       const targetPath = fromPath || getRoleDashboardPath(loggedUser.role);
       navigate(targetPath, { replace: true });
     } catch (err) {

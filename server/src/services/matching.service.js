@@ -1,3 +1,6 @@
+import { Booking } from '../models/Booking.model.js';
+import { inMemoryBookings, normalizeStatus } from './booking.service.js';
+import { normalizeProfession, professionMatches, rankWithAiFallback } from './smartMatching.service.js';
 import { Worker, WorkerProfile } from '../models/WorkerProfile.model.js';
 import { Cooperative } from '../models/Cooperative.model.js';
 import { inMemoryWorkers } from './worker.service.js';
@@ -30,6 +33,9 @@ export class MatchingService {
     longitude,
     skill,
     trade,
+    query,
+    cooperativePreference,
+    city,
     availableOnly = true,
     maxRadiusKm = 30,
     sortBy = 'distance',
@@ -37,11 +43,11 @@ export class MatchingService {
     const custLat = Number(latitude);
     const custLng = Number(longitude);
 
-    if (isNaN(custLat) || isNaN(custLng)) {
+    if (latitude == null || longitude == null || !Number.isFinite(custLat) || !Number.isFinite(custLng) || Math.abs(custLat) > 90 || Math.abs(custLng) > 180) {
       throw new AppError('Valid customer latitude and longitude are required for location matching', 400);
     }
 
-    const targetQuery = (trade || skill || '').trim().toLowerCase();
+    const targetQuery = normalizeProfession(trade || skill || query || '');
     const maxRadius = Math.min(100, Math.max(1, Number(maxRadiusKm) || 30));
 
     // -------------------------------------------------------------
@@ -66,6 +72,9 @@ export class MatchingService {
           _id: coop.id || coop._id,
           name: coop.name,
           registrationNumber: coop.registrationDetails?.registrationNumber || 'N/A',
+          verificationStatus: coop.verificationStatus,
+          logo: coop.metadata?.logo || null,
+          rating: coop.rating || { average: 0, count: 0 },
           trustScore: Number(coop.trustScore || 96.5),
           serviceCategories: coop.serviceCategories || [],
           distance: dist,
@@ -75,7 +84,7 @@ export class MatchingService {
           coverageRadiusKm: coopRadius,
           district: coop.location?.district || coop.district || 'Pune',
           state: coop.location?.state || coop.state || 'Maharashtra',
-          memberCount: coop.members?.length || 20,
+          memberCount: coop.members?.length || 0,
           coordinates: {
             latitude: coopLat,
             longitude: coopLng,
@@ -83,7 +92,7 @@ export class MatchingService {
         };
       })
       // Filter within cooperative coverage or within customer search radius
-      .filter((c) => c.distance <= Math.max(c.coverageRadiusKm, maxRadius))
+      .filter((c) => c.verificationStatus === 'verified' && (!city || !c.district || c.district.toLowerCase() === String(city).trim().toLowerCase()) && c.distance <= maxRadius && (!targetQuery || c.serviceCategories.some(category => professionMatches(category, targetQuery))))
       .sort((a, b) => a.distance - b.distance);
 
     // Build cooperative map for fast lookup
@@ -100,25 +109,41 @@ export class MatchingService {
     if (mongoose.connection.readyState === 1) {
       allWorkers = await Worker.find({
         'verificationStatus.status': { $in: ['verified', 'pending'] },
-      }).lean();
+      }).populate('user', 'name profileImage').lean();
     } else {
       allWorkers = Array.from(inMemoryWorkers.values());
     }
 
+    const workloads = new Map();
+    if (mongoose.connection.readyState === 1) {
+      const counts = await Booking.aggregate([
+        { $match: { status: { $in: ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'IN_PROGRESS', 'assigned', 'accepted', 'on_the_way', 'in_progress'] } } },
+        { $group: { _id: '$worker', count: { $sum: 1 } } },
+      ]);
+      counts.forEach(item => workloads.set(String(item._id), item.count));
+    } else {
+      const seen = new Set();
+      for (const booking of inMemoryBookings.values()) {
+        const id = String(booking._id || booking.id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'IN_PROGRESS'].includes(normalizeStatus(booking.status))) {
+          const workerId = String(booking.worker?._id || booking.worker || booking.workerId || '');
+          workloads.set(workerId, (workloads.get(workerId) || 0) + 1);
+        }
+      }
+    }
     const qualifiedMatches = [];
 
     for (const worker of allWorkers) {
+      if (city && worker.location?.address?.city && worker.location.address.city.toLowerCase() !== String(city).trim().toLowerCase()) continue;
       // 1. Trade & Skill Filtering
       const workerTrade = (worker.trade || worker.experience?.primaryTrade || '').toLowerCase();
       const subTrades = (worker.experience?.subTrades || []).map((t) => String(t).toLowerCase());
       const skillNames = (worker.skills || []).map((s) => (typeof s === 'string' ? s : s.name || '').toLowerCase());
 
       if (targetQuery) {
-        const tradeMatches =
-          workerTrade.includes(targetQuery) ||
-          targetQuery.includes(workerTrade) ||
-          subTrades.some((st) => st.includes(targetQuery) || targetQuery.includes(st)) ||
-          skillNames.some((sk) => sk.includes(targetQuery) || targetQuery.includes(sk));
+        const tradeMatches = [workerTrade, worker.experience?.primaryTrade, ...subTrades, ...skillNames].some(value => professionMatches(value, targetQuery));
 
         if (!tradeMatches) {
           continue;
@@ -138,24 +163,16 @@ export class MatchingService {
 
       // 4. Service Area & Radius Constraint
       const workerServiceRadius = Number(
-        worker.serviceArea?.radiusKm || worker.location?.workingRadiusKm || 15
+        worker.serviceRadius || worker.serviceArea?.radiusKm || worker.location?.workingRadiusKm || 15
       );
-      const effectiveRadius = Math.max(workerServiceRadius, maxRadius);
+      const effectiveRadius = Math.min(workerServiceRadius, maxRadius);
       if (dist > effectiveRadius) {
         continue;
       }
 
       // 5. Associated Cooperative resolution
       const coopId = worker.cooperativeId || worker.cooperative || '';
-      const associatedCoop = coopMap.get(String(coopId)) || nearbyCooperatives[0] || {
-        id: 'COOP-PUN-01',
-        name: 'Pune Shramik Vikas Sahakari',
-        trustScore: 98.4,
-        district: 'Pune',
-        state: 'Maharashtra',
-        distance: dist + 0.5,
-        distanceFormatted: formatDistance(dist + 0.5),
-      };
+      const associatedCoop = coopMap.get(String(coopId)) || {};
 
       // 6. Multi-Factor Ranking Score
       // Proximity (0-50 pts) + Rating (0-30 pts) + Verified (0-10 pts) + Experience (0-10 pts)
@@ -173,25 +190,24 @@ export class MatchingService {
         worker: {
           id: worker.id || worker._id,
           _id: worker.id || worker._id,
-          name: worker.name || 'Artisan Tradesperson',
-          phone: worker.phone || '+91 98000 00000',
+          name: worker.user?.name || worker.name || 'Artisan Tradesperson',
           trade: worker.trade || worker.experience?.primaryTrade || 'General Technical',
           primaryTrade: worker.experience?.primaryTrade || worker.trade || 'General Technical',
           subTrades: worker.experience?.subTrades || [],
           bio: worker.experience?.bio || '',
-          avatar: worker.profileImage || null,
+          avatar: worker.user?.profileImage || worker.profileImage || null,
           experienceYears: worker.experience?.years || 0,
           rates: worker.rates || { dailyFloorRate: 800, hourlyRate: 250, currency: 'INR' },
           isVerified: Boolean(worker.verificationStatus?.status === 'verified' || worker.isVerified),
           aadhaarVerified: Boolean(worker.verificationStatus?.aadhaarVerified || worker.aadhaarVerified),
           nsdcCertified: Boolean(worker.verificationStatus?.nsdcCertified || worker.nsdcCertified),
-          jobsCompleted: worker.jobsCompleted || 120,
+          jobsCompleted: worker.jobsCompleted || 0,
         },
         // Skills
         skills: skillsList.length > 0 ? skillsList : [worker.trade || 'Specialized Artisan'],
         // Rating
-        rating: Number((worker.rating?.average || worker.rating || 4.9).toFixed(2)),
-        ratingCount: worker.rating?.count || worker.rating?.totalReviews || 45,
+        rating: Number(Number(worker.rating?.average ?? (typeof worker.rating === "number" ? worker.rating : 0)).toFixed(2)),
+        ratingCount: worker.rating?.count || worker.rating?.totalReviews || 0,
         // Distance
         distance: dist,
         distanceFormatted: formatDistance(dist),
@@ -206,6 +222,9 @@ export class MatchingService {
         cooperative: {
           id: associatedCoop.id || associatedCoop._id,
           name: associatedCoop.name,
+          verificationStatus: associatedCoop.verificationStatus,
+          logo: associatedCoop.logo || null,
+          rating: associatedCoop.rating || { average: 0, count: 0 },
           trustScore: associatedCoop.trustScore,
           district: associatedCoop.district,
           state: associatedCoop.state,
@@ -219,6 +238,10 @@ export class MatchingService {
         },
         // Ranking score
         matchScore,
+        serviceRadius: workerServiceRadius,
+        exactProfession: normalizeProfession(worker.experience?.primaryTrade || workerTrade) === targetQuery,
+        skillMatch: skillNames.some(value => professionMatches(value, targetQuery)),
+        workload: workloads.get(String(worker._id || worker.id)) || workloads.get(String(worker.user?._id || worker.user || worker.userId)) || 0,
       });
     }
 
@@ -236,7 +259,9 @@ export class MatchingService {
       qualifiedMatches.sort((a, b) => a.distance - b.distance || b.rating - a.rating);
     }
 
+    const ranked = sortBy === 'score' ? await rankWithAiFallback(qualifiedMatches, { query: targetQuery, cooperativePreference }) : { workers: qualifiedMatches, rankingEngine: 'manual' };
     return {
+      rankingEngine: ranked.rankingEngine,
       customerLocation: {
         latitude: custLat,
         longitude: custLng,
@@ -249,7 +274,7 @@ export class MatchingService {
         sortBy,
       },
       cooperatives: nearbyCooperatives,
-      workers: qualifiedMatches,
+      workers: ranked.workers,
       totalMatches: qualifiedMatches.length,
     };
   }
@@ -262,7 +287,7 @@ export class MatchingService {
     const custLng = Number(longitude);
     const maxRadius = Math.min(100, Math.max(1, Number(radiusKm) || 30));
 
-    if (isNaN(custLat) || isNaN(custLng)) {
+    if (latitude == null || longitude == null || !Number.isFinite(custLat) || !Number.isFinite(custLng) || Math.abs(custLat) > 90 || Math.abs(custLng) > 180) {
       throw new AppError('Valid latitude and longitude are required', 400);
     }
 
@@ -282,13 +307,16 @@ export class MatchingService {
           id: coop.id || coop._id,
           name: coop.name,
           registrationNumber: coop.registrationDetails?.registrationNumber || 'N/A',
+          verificationStatus: coop.verificationStatus,
+          logo: coop.metadata?.logo || null,
+          rating: coop.rating || { average: 0, count: 0 },
           trustScore: Number(coop.trustScore || 96.5),
           serviceCategories: coop.serviceCategories || [],
           distance: dist,
           distanceFormatted: formatDistance(dist),
           district: coop.location?.district || coop.district || 'Pune',
           state: coop.location?.state || coop.state || 'Maharashtra',
-          memberCount: coop.members?.length || 20,
+          memberCount: coop.members?.length || 0,
           coordinates: { latitude: coopLat, longitude: coopLng },
         };
       })

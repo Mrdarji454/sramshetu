@@ -1,3 +1,4 @@
+import { issueWorkOtp, verifyWorkOtp } from '../src/services/bookingVerification.service.js';
 import { CatalogService } from '../src/services/service.service.js';
 import { BookingService, VALID_TRANSITIONS, normalizeStatus } from '../src/services/booking.service.js';
 
@@ -60,7 +61,7 @@ async function runBookingFlowTests() {
 
   assert(newBooking.status === 'PENDING', 'New booking starts in PENDING status');
   assert(newBooking.qrVerification?.token?.startsWith('QR-SS-'), 'Generates secure QR token');
-  assert(newBooking.qrVerification?.otpCode?.length === 4, 'Generates 4-digit OTP code');
+  assert(newBooking.qrVerification?.otpCode == null, 'Does not expose a reusable booking OTP');
   assert(newBooking.price.commissionCut === 0, 'Guarantees 0% middleman commission');
   assert(newBooking.statusHistory.length === 1, 'Records initial status in statusHistory');
 
@@ -92,22 +93,12 @@ async function runBookingFlowTests() {
   );
   assert(onTheWay.status === 'ON_THE_WAY', 'Status transitions from ACCEPTED to ON_THE_WAY');
 
-  const inProgress = await BookingService.updateBookingStatus(
-    newBooking.id,
-    'IN_PROGRESS',
-    mockWorkerId,
-    'WORKER',
-    { note: 'Artisan arrived and commenced diagnostic work' }
-  );
-  assert(inProgress.status === 'IN_PROGRESS', 'Status transitions from ON_THE_WAY to IN_PROGRESS');
-
-  const completed = await BookingService.updateBookingStatus(
-    newBooking.id,
-    'COMPLETED',
-    mockWorkerId,
-    'WORKER',
-    { note: 'Wiring repairs completed and circuits tested' }
-  );
+  const start = await issueWorkOtp(newBooking.id, 'start', mockCustomerUserId, 'USER');
+  const inProgress = await verifyWorkOtp(newBooking.id, 'start', start.code, mockWorkerId, 'WORKER');
+  assert(inProgress.status === 'IN_PROGRESS', 'Start OTP transitions to IN_PROGRESS');
+  newBooking.paymentStatus = 'escrow_locked';
+  const end = await issueWorkOtp(newBooking.id, 'end', mockCustomerUserId, 'USER');
+  const completed = await verifyWorkOtp(newBooking.id, 'end', end.code, mockWorkerId, 'WORKER');
   assert(completed.status === 'COMPLETED', 'Status transitions from IN_PROGRESS to COMPLETED');
   assert(completed.paymentStatus === 'released', 'Escrow payment marked released on completion');
   assert(completed.qrVerification?.isVerified === true, 'QR verification marked verified on completion');
@@ -120,7 +111,7 @@ async function runBookingFlowTests() {
   } catch (err) {
     terminalErr = err;
   }
-  assert(terminalErr && terminalErr.statusCode === 400, 'Blocks transition out of terminal state COMPLETED (400)');
+  assert(terminalErr && terminalErr.statusCode === 403, 'Blocks transition out of terminal state COMPLETED without OTP (403)');
 
   // 7b: Cannot jump from PENDING directly to COMPLETED
   const pendingBooking = await BookingService.createBooking(mockCustomerUserId, {
@@ -138,7 +129,7 @@ async function runBookingFlowTests() {
   } catch (err) {
     illegalJumpErr = err;
   }
-  assert(illegalJumpErr && illegalJumpErr.statusCode === 400, 'Blocks illegal jump from PENDING to COMPLETED (400)');
+  assert(illegalJumpErr && illegalJumpErr.statusCode === 403, 'Blocks illegal jump from PENDING to COMPLETED without OTP (403)');
 
   // 7c: Cannot jump from ASSIGNED directly to IN_PROGRESS (must accept & travel first)
   await BookingService.assignWorker(pendingBooking.id, mockWorkerId, mockCoopId, 'COOPERATIVE');
@@ -148,7 +139,7 @@ async function runBookingFlowTests() {
   } catch (err) {
     skipAcceptErr = err;
   }
-  assert(skipAcceptErr && skipAcceptErr.statusCode === 400, 'Blocks illegal jump from ASSIGNED directly to IN_PROGRESS (400)');
+  assert(skipAcceptErr && skipAcceptErr.statusCode === 403, 'Blocks illegal jump from ASSIGNED directly to IN_PROGRESS without OTP (403)');
 
   // 7d: Unauthorized role trying to complete job
   let unauthorizedRoleErr = null;

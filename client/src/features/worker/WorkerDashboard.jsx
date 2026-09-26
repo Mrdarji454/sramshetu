@@ -1,35 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { DashboardLayout } from '../../layouts/DashboardLayout';
-import { useAuth } from '../../context/AuthContext';
-import workerService from '../../services/worker.service';
-import { bookingService } from '../../services/booking.service';
-import { WorkerOnboardingWizard } from './WorkerOnboardingWizard';
-import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { 
-  HardHat, 
-  QrCode, 
-  IndianRupee, 
-  MapPin, 
-  Calendar, 
-  ShieldCheck, 
-  Clock, 
-  CheckCircle2, 
-  Power, 
-  Sparkles, 
+import React, { useState, useEffect } from "react";
+import { DashboardLayout } from "../../layouts/DashboardLayout";
+import { useAuth } from "../../context/AuthContext";
+import workerService from "../../services/worker.service";
+import { bookingService } from "../../services/booking.service";
+import { WorkerOnboardingWizard } from "./WorkerOnboardingWizard";
+import { Card } from "../../components/ui/Card";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import {
+  HardHat,
+  QrCode,
+  IndianRupee,
+  MapPin,
+  Calendar,
+  ShieldCheck,
+  Clock,
+  CheckCircle2,
+  Power,
+  Sparkles,
   PhoneCall,
   Edit3,
   AlertCircle,
   Truck,
   Wrench,
   XCircle,
-  RefreshCw
-} from 'lucide-react';
+  RefreshCw,
+  Key,
+  Check,
+  X,
+  MessageSquare,
+} from "lucide-react";
 
 export function WorkerDashboard() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' or 'onboarding'
+  const [activeTab, setActiveTab] = useState("overview"); // 'overview' or 'onboarding'
   const [profile, setProfile] = useState(null);
   const [verification, setVerification] = useState(null);
   const [assignedJobs, setAssignedJobs] = useState([]);
@@ -38,29 +42,38 @@ export function WorkerDashboard() {
   const [actionSuccessMsg, setActionSuccessMsg] = useState(null);
   const [isProcessingId, setIsProcessingId] = useState(null);
 
+  // OTP Verification Handshake Modal
+  const [otpModalJob, setOtpModalJob] = useState(null);
+  const [enteredOtp, setEnteredOtp] = useState("");
+  const [otpError, setOtpError] = useState(null);
+
+  // Service Completion Modal
+  const [completionModalJob, setCompletionModalJob] = useState(null);
+  const [completionNote, setCompletionNote] = useState("");
+
   const loadData = async () => {
     setIsLoading(true);
     try {
       const [profData, verData, jobsData] = await Promise.allSettled([
         workerService.getProfile(),
         workerService.getVerificationStatus(),
-        bookingService.getBookings({ role: 'worker' }),
+        bookingService.getBookings({ role: "worker" }),
       ]);
 
-      if (profData.status === 'fulfilled' && profData.value) {
+      if (profData.status === "fulfilled" && profData.value) {
         setProfile(profData.value);
-        setIsAvailable(profData.value.availability?.status === 'available');
+        setIsAvailable(profData.value.availability?.status === "available");
       }
 
-      if (verData.status === 'fulfilled' && verData.value) {
+      if (verData.status === "fulfilled" && verData.value) {
         setVerification(verData.value);
       }
 
-      if (jobsData.status === 'fulfilled' && Array.isArray(jobsData.value)) {
+      if (jobsData.status === "fulfilled" && Array.isArray(jobsData.value)) {
         setAssignedJobs(jobsData.value);
       }
     } catch (err) {
-      console.error('Error loading worker dashboard:', err);
+      console.error("Error loading worker dashboard:", err);
     } finally {
       setIsLoading(false);
     }
@@ -71,12 +84,12 @@ export function WorkerDashboard() {
   }, []);
 
   const handleToggleAvailability = async () => {
-    const nextStatus = isAvailable ? 'offline' : 'available';
+    const nextStatus = isAvailable ? "offline" : "available";
     setIsAvailable(!isAvailable);
     try {
       await workerService.updateAvailability({ status: nextStatus });
     } catch (err) {
-      console.error('Failed to update availability:', err);
+      console.error("Failed to update availability:", err);
     }
   };
 
@@ -86,64 +99,140 @@ export function WorkerDashboard() {
     setIsProcessingId(jobId);
     try {
       await bookingService.acceptBooking(jobId);
-      setActionSuccessMsg(`Job #${jobId} accepted! Time slot confirmed with customer.`);
+      setActionSuccessMsg(
+        `Job #${jobId} accepted! Time slot confirmed with customer.`,
+      );
       loadData();
       setTimeout(() => setActionSuccessMsg(null), 4000);
     } catch (err) {
-      alert(err.message || 'Failed to accept job');
+      alert(err.message || "Failed to accept job");
     } finally {
       setIsProcessingId(null);
     }
   };
 
   const handleRejectJob = async (job) => {
-    const reason = window.prompt('Please provide a reason for declining this assignment:');
+    const reason = window.prompt(
+      "Please provide a reason for declining this assignment:",
+    );
     if (!reason) return;
 
     const jobId = job.id || job._id;
     setIsProcessingId(jobId);
     try {
       await bookingService.rejectBooking(jobId, reason);
-      setActionSuccessMsg(`Job #${jobId} declined. Cooperative society has been notified to reassign.`);
+      setActionSuccessMsg(
+        `Job #${jobId} declined. Cooperative society has been notified to reassign.`,
+      );
       loadData();
       setTimeout(() => setActionSuccessMsg(null), 4000);
     } catch (err) {
-      alert(err.message || 'Failed to reject job');
+      alert(err.message || "Failed to reject job");
     } finally {
       setIsProcessingId(null);
     }
   };
 
-  const handleAdvanceStatus = async (job, targetStatus, successText) => {
+  const handleAdvanceStatus = async (
+    job,
+    targetStatus,
+    successText,
+    payload = {},
+  ) => {
     const jobId = job.id || job._id;
     setIsProcessingId(jobId);
     try {
       await bookingService.updateStatus(jobId, targetStatus, {
         note: `Worker updated progress to ${targetStatus}`,
+        ...payload,
       });
       setActionSuccessMsg(successText || `Status updated to ${targetStatus}`);
       loadData();
       setTimeout(() => setActionSuccessMsg(null), 4000);
     } catch (err) {
-      alert(err.message || 'Failed to update status');
+      alert(err.message || "Failed to update status");
     } finally {
       setIsProcessingId(null);
     }
   };
 
-  const isVerified = verification?.status === 'verified';
-  const isRejected = verification?.status === 'rejected';
+  const handleOpenOtpModal = (job) => {
+    setOtpModalJob(job);
+    setEnteredOtp("");
+    setOtpError(null);
+  };
+
+  const handleVerifyOtpSubmit = async (e) => {
+    e.preventDefault();
+    if (!otpModalJob) return;
+
+    const jobId = otpModalJob.id || otpModalJob._id;
+    setIsProcessingId(jobId);
+    try {
+      await bookingService.verifyOtp(jobId, "start", enteredOtp);
+      setActionSuccessMsg(
+        `Arrival verified! Service is now marked In Progress.`,
+      );
+      setOtpModalJob(null);
+      loadData();
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } catch (err) {
+      alert(err.message || "Failed to verify arrival");
+    } finally {
+      setIsProcessingId(null);
+    }
+  };
+
+  const handleOpenCompletionModal = (job) => {
+    setCompletionModalJob(job);
+    setCompletionNote("");
+    setEnteredOtp("");
+  };
+
+  const handleCompleteServiceSubmit = async (e) => {
+    e.preventDefault();
+    if (!completionModalJob) return;
+
+    const jobId = completionModalJob.id || completionModalJob._id;
+    setIsProcessingId(jobId);
+    try {
+      await bookingService.verifyOtp(jobId, "end", enteredOtp);
+      setActionSuccessMsg(
+        `Work marked as completed! 100% direct escrow payout has been authorized.`,
+      );
+      setCompletionModalJob(null);
+      loadData();
+      setTimeout(() => setActionSuccessMsg(null), 5000);
+    } catch (err) {
+      alert(err.message || "Failed to complete job");
+    } finally {
+      setIsProcessingId(null);
+    }
+  };
+
+  const isVerified = verification?.status === "verified";
+  const isRejected = verification?.status === "rejected";
 
   // Calculate earnings
-  const completedJobs = assignedJobs.filter((j) => (j.status || '').toUpperCase() === 'COMPLETED');
-  const activeJobs = assignedJobs.filter((j) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes((j.status || '').toUpperCase()));
-  const totalEarned = completedJobs.reduce((sum, j) => sum + (j.price?.totalAmount || j.escrowAmount || 900), 0);
+  const completedJobs = assignedJobs.filter(
+    (j) => (j.status || "").toUpperCase() === "COMPLETED",
+  );
+  const activeJobs = assignedJobs.filter(
+    (j) =>
+      !["COMPLETED", "CANCELLED", "REJECTED"].includes(
+        (j.status || "").toUpperCase(),
+      ),
+  );
+  const totalEarned = completedJobs.reduce(
+    (sum, j) => sum + (j.price?.totalAmount || j.escrowAmount || 900),
+    0,
+  );
 
   return (
     <DashboardLayout
-      title={`Welcome, ${user?.name || profile?.name || 'Shramik'}`}
+      title={`Welcome, ${user?.name || profile?.name || "Shramik"}`}
       subtitle="Your work is backed by your cooperative guild. 100% direct payouts with zero platform deductions."
-      roleBadge={isVerified ? 'NSDC Verified Artisan' : 'Verification Underway'}
+      roleBadge={isVerified ? "NSDC Verified Artisan" : "Verification Underway"}
     >
       {/* Toast Alert */}
       {actionSuccessMsg && (
@@ -152,7 +241,12 @@ export function WorkerDashboard() {
             <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
             <span className="font-bold">{actionSuccessMsg}</span>
           </div>
-          <button onClick={() => setActionSuccessMsg(null)} className="text-emerald-700 hover:text-emerald-900 font-bold text-sm">✕</button>
+          <button
+            onClick={() => setActionSuccessMsg(null)}
+            className="text-emerald-700 hover:text-emerald-900 font-bold text-sm"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -161,18 +255,22 @@ export function WorkerDashboard() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab('overview')}
+            onClick={() => setActiveTab("overview")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-              activeTab === 'overview'
-                ? 'bg-brand-navy-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              activeTab === "overview"
+                ? "bg-brand-navy-900 text-white shadow-sm"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
             }`}
           >
             <span>Daily Work Rota & Jobs</span>
             {activeJobs.length > 0 && (
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                activeTab === 'overview' ? 'bg-brand-saffron-500 text-white' : 'bg-brand-saffron-100 text-brand-saffron-800'
-              }`}>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  activeTab === "overview"
+                    ? "bg-brand-saffron-500 text-white"
+                    : "bg-brand-saffron-100 text-brand-saffron-800"
+                }`}
+              >
                 {activeJobs.length} Active
               </span>
             )}
@@ -180,11 +278,11 @@ export function WorkerDashboard() {
 
           <button
             type="button"
-            onClick={() => setActiveTab('onboarding')}
+            onClick={() => setActiveTab("onboarding")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'onboarding'
-                ? 'bg-brand-navy-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              activeTab === "onboarding"
+                ? "bg-brand-navy-900 text-white shadow-sm"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
             }`}
           >
             <Edit3 className="w-3.5 h-3.5" />
@@ -192,7 +290,11 @@ export function WorkerDashboard() {
             {verification && (
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isVerified ? 'bg-emerald-400' : isRejected ? 'bg-red-400' : 'bg-amber-400'
+                  isVerified
+                    ? "bg-emerald-400"
+                    : isRejected
+                      ? "bg-red-400"
+                      : "bg-amber-400"
                 }`}
               />
             )}
@@ -202,11 +304,13 @@ export function WorkerDashboard() {
         {/* Verification Status Pill */}
         {verification && (
           <Badge
-            variant={isVerified ? 'verified' : isRejected ? 'outline' : 'saffron'}
+            variant={
+              isVerified ? "verified" : isRejected ? "outline" : "saffron"
+            }
             size="md"
             dot
           >
-            Status: {(verification.status || 'PENDING').toUpperCase()}
+            Status: {(verification.status || "PENDING").toUpperCase()}
           </Badge>
         )}
       </div>
@@ -216,24 +320,26 @@ export function WorkerDashboard() {
         <div
           className={`p-4 rounded-2xl mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border ${
             isRejected
-              ? 'bg-red-50 text-red-900 border-red-200'
-              : 'bg-amber-50 text-amber-900 border-amber-200'
+              ? "bg-red-50 text-red-900 border-red-200"
+              : "bg-amber-50 text-amber-900 border-amber-200"
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl ${isRejected ? 'bg-red-100' : 'bg-amber-100'}`}>
+            <div
+              className={`p-2 rounded-xl ${isRejected ? "bg-red-100" : "bg-amber-100"}`}
+            >
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
             </div>
             <div>
               <p className="text-xs font-bold">
                 {isRejected
-                  ? 'Application Review Needs Attention'
-                  : 'Artisan Verification In Progress'}
+                  ? "Application Review Needs Attention"
+                  : "Artisan Verification In Progress"}
               </p>
               <p className="text-[11px] opacity-80 mt-0.5">
                 {isRejected
-                  ? `Registrar Note: ${verification?.rejectionReason || 'Please update your documents.'}`
-                  : 'Your Aadhaar e-KYC and technical certificates are being verified by your cooperative society registrar.'}
+                  ? `Registrar Note: ${verification?.rejectionReason || "Please update your documents."}`
+                  : "Your Aadhaar e-KYC and technical certificates are being verified by your cooperative society registrar."}
               </p>
             </div>
           </div>
@@ -241,43 +347,52 @@ export function WorkerDashboard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setActiveTab('onboarding')}
+            onClick={() => setActiveTab("onboarding")}
             className="whitespace-nowrap"
           >
-            {isRejected ? 'Update Documents' : 'View Checklist'}
+            {isRejected ? "Update Documents" : "View Checklist"}
           </Button>
         </div>
       )}
 
       {/* Tab 1: Overview Dashboard */}
-      {activeTab === 'overview' && (
+      {activeTab === "overview" && (
         <>
           {/* Availability Status Banner */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className={`w-3 h-3 rounded-full ${isAvailable ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+              <div
+                className={`w-3 h-3 rounded-full ${isAvailable ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`}
+              />
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-slate-900 text-sm">
-                    Dispatch Status: {isAvailable ? 'Available for New Jobs' : 'Offline / On Break'}
+                    Dispatch Status:{" "}
+                    {isAvailable
+                      ? "Available for New Jobs"
+                      : "Offline / On Break"}
                   </span>
-                  <Badge variant={isAvailable ? 'verified' : 'default'} size="sm">
-                    {isAvailable ? 'In Active Rota' : 'Standby'}
+                  <Badge
+                    variant={isAvailable ? "verified" : "default"}
+                    size="sm"
+                  >
+                    {isAvailable ? "In Active Rota" : "Standby"}
                   </Badge>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  AI Fair Allocation Engine includes you in proximity dispatches across a {profile?.location?.workingRadiusKm || 15} km radius.
+                  AI Fair Allocation Engine includes you in proximity dispatches
+                  across a {profile?.location?.workingRadiusKm || 15} km radius.
                 </p>
               </div>
             </div>
 
             <Button
-              variant={isAvailable ? 'outline' : 'primary'}
+              variant={isAvailable ? "outline" : "primary"}
               size="sm"
               icon={Power}
               onClick={handleToggleAvailability}
             >
-              {isAvailable ? 'Go Offline' : 'Go Online'}
+              {isAvailable ? "Go Offline" : "Go Online"}
             </Button>
           </div>
 
@@ -285,33 +400,47 @@ export function WorkerDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
             <Card className="p-5 bg-white border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Settled Earnings</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Total Settled Earnings
+                </span>
                 <IndianRupee className="w-4 h-4 text-emerald-600" />
               </div>
               <div className="text-2xl font-extrabold text-slate-900 font-display">
                 ₹{(totalEarned || 11400).toLocaleString()}
               </div>
-              <p className="text-xs text-emerald-600 mt-1 font-semibold">100% Credited to Bank (0% Platform Fee)</p>
+              <p className="text-xs text-emerald-600 mt-1 font-semibold">
+                100% Credited to Bank (0% Platform Fee)
+              </p>
             </Card>
 
             <Card className="p-5 bg-white border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Guaranteed Floor Wage</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Guaranteed Floor Wage
+                </span>
                 <ShieldCheck className="w-4 h-4 text-brand-saffron-600" />
               </div>
               <div className="text-2xl font-extrabold text-slate-900 font-display">
                 ₹{profile?.rates?.dailyFloorRate || 1300} / day
               </div>
-              <p className="text-xs text-slate-500 mt-1">Pune Shramik Vikas Sahakari Guild</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Pune Shramik Vikas Sahakari Guild
+              </p>
             </Card>
 
             <Card className="p-5 bg-white border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Guild Welfare Cover</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Guild Welfare Cover
+                </span>
                 <Sparkles className="w-4 h-4 text-indigo-600" />
               </div>
-              <div className="text-2xl font-extrabold text-indigo-700 font-display">₹5,00,000</div>
-              <p className="text-xs text-slate-500 mt-1">Family Medical & Tool Protection Pool</p>
+              <div className="text-2xl font-extrabold text-indigo-700 font-display">
+                ₹5,00,000
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Family Medical & Tool Protection Pool
+              </p>
             </Card>
           </div>
 
@@ -319,9 +448,12 @@ export function WorkerDashboard() {
           <div className="space-y-6 mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Your Assigned Work Rota</h3>
+                <h3 className="text-base font-bold text-slate-900">
+                  Your Assigned Work Rota
+                </h3>
                 <p className="text-xs text-slate-500">
-                  Accept incoming tasks and advance status: ASSIGNED → ACCEPTED → ON THE WAY → IN PROGRESS → COMPLETED
+                  Accept incoming tasks and advance status: ASSIGNED → ACCEPTED
+                  → ON THE WAY → IN PROGRESS → COMPLETED
                 </p>
               </div>
 
@@ -339,48 +471,53 @@ export function WorkerDashboard() {
             {assignedJobs.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 space-y-3 shadow-sm">
                 <HardHat className="w-12 h-12 text-slate-300 mx-auto" />
-                <p className="text-sm font-semibold text-slate-700">No Jobs Currently Assigned</p>
+                <p className="text-sm font-semibold text-slate-700">
+                  No Jobs Currently Assigned
+                </p>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  Keep your dispatch status online. When your cooperative society assigns a customer booking, it will appear here.
+                  Keep your dispatch status online. When your cooperative
+                  society assigns a customer booking, it will appear here.
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 {assignedJobs.map((job) => {
                   const jobId = job.id || job._id;
-                  const status = (job.status || 'ASSIGNED').toUpperCase();
+                  const status = (job.status || "ASSIGNED").toUpperCase();
                   const isProcessing = isProcessingId === jobId;
-                  const isAssigned = status === 'ASSIGNED';
-                  const isAccepted = status === 'ACCEPTED';
-                  const isOnTheWay = status === 'ON_THE_WAY';
-                  const isInProgress = status === 'IN_PROGRESS';
-                  const isCompleted = status === 'COMPLETED';
+                  const isAssigned = status === "ASSIGNED";
+                  const isAccepted = status === "ACCEPTED";
+                  const isOnTheWay = status === "ON_THE_WAY";
+                  const isInProgress = status === "IN_PROGRESS";
+                  const isCompleted = status === "COMPLETED";
 
                   return (
                     <div
                       key={jobId}
                       className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
                         isAssigned
-                          ? 'border-brand-saffron-300 ring-2 ring-brand-saffron-100'
+                          ? "border-brand-saffron-300 ring-2 ring-brand-saffron-100"
                           : isCompleted
-                          ? 'border-slate-200 bg-slate-50/40'
-                          : 'border-slate-200'
+                            ? "border-slate-200 bg-slate-50/40"
+                            : "border-slate-200"
                       }`}
                     >
                       {/* Job Header */}
                       <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono font-bold text-slate-400">#{jobId?.slice(-6) || jobId}</span>
+                            <span className="text-xs font-mono font-bold text-slate-400">
+                              #{jobId?.slice(-6) || jobId}
+                            </span>
                             <Badge
                               variant={
                                 isCompleted
-                                  ? 'verified'
+                                  ? "verified"
                                   : isAssigned
-                                  ? 'saffron'
-                                  : isInProgress || isOnTheWay
-                                  ? 'saffron'
-                                  : 'default'
+                                    ? "saffron"
+                                    : isInProgress || isOnTheWay
+                                      ? "saffron"
+                                      : "default"
                               }
                               size="sm"
                             >
@@ -388,10 +525,13 @@ export function WorkerDashboard() {
                             </Badge>
                           </div>
                           <h4 className="text-lg font-bold text-slate-900 mt-1">
-                            {job.serviceName || 'Skilled Trade Service'}
+                            {job.serviceName || "Skilled Trade Service"}
                           </h4>
                           <span className="text-xs text-slate-500">
-                            Trade: <strong className="text-slate-700">{job.trade || 'General Artisan'}</strong>
+                            Trade:{" "}
+                            <strong className="text-slate-700">
+                              {job.trade || "General Artisan"}
+                            </strong>
                           </span>
                         </div>
 
@@ -415,8 +555,10 @@ export function WorkerDashboard() {
                                 {job.location?.serviceAddress?.street}
                               </span>
                               <span className="text-slate-500">
-                                {job.location?.serviceAddress?.city} - {job.location?.serviceAddress?.pincode}
-                                {job.location?.serviceAddress?.landmark && ` (Near: ${job.location.serviceAddress.landmark})`}
+                                {job.location?.serviceAddress?.city} -{" "}
+                                {job.location?.serviceAddress?.pincode}
+                                {job.location?.serviceAddress?.landmark &&
+                                  ` (Near: ${job.location.serviceAddress.landmark})`}
                               </span>
                             </div>
                           </div>
@@ -424,14 +566,16 @@ export function WorkerDashboard() {
                           <div className="flex items-center gap-2.5 text-slate-700">
                             <Clock className="w-4 h-4 text-slate-400 flex-shrink-0" />
                             <span>
-                              Scheduled Arrival:{' '}
+                              Scheduled Arrival:{" "}
                               <strong>
-                                {new Date(job.scheduledTime?.start || Date.now()).toLocaleDateString('en-IN', {
-                                  weekday: 'short',
-                                  day: 'numeric',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
+                                {new Date(
+                                  job.scheduledTime?.start || Date.now(),
+                                ).toLocaleDateString("en-IN", {
+                                  weekday: "short",
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
                                 })}
                               </strong>
                             </span>
@@ -448,8 +592,14 @@ export function WorkerDashboard() {
                         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-4">
                           <div className="flex items-center justify-between">
                             <div>
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Customer</span>
-                              <span className="font-bold text-slate-900 text-sm block mt-0.5">{job.customerName || job.customer?.name || 'Customer'}</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                Customer
+                              </span>
+                              <span className="font-bold text-slate-900 text-sm block mt-0.5">
+                                {job.customerName ||
+                                  job.customer?.name ||
+                                  "Customer"}
+                              </span>
                             </div>
 
                             {(job.customerPhone || job.customer?.phone) && (
@@ -458,7 +608,9 @@ export function WorkerDashboard() {
                                 className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 hover:bg-slate-100 flex items-center gap-1.5 font-bold font-mono text-xs"
                               >
                                 <PhoneCall className="w-3.5 h-3.5 text-brand-saffron-600" />
-                                <span>{job.customerPhone || job.customer?.phone}</span>
+                                <span>
+                                  {job.customerPhone || job.customer?.phone}
+                                </span>
                               </a>
                             )}
                           </div>
@@ -469,7 +621,9 @@ export function WorkerDashboard() {
                             {isAssigned && (
                               <div className="space-y-2">
                                 <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium">
-                                  ⚠️ Cooperative has assigned this order to you. Please accept to confirm your slot or decline to allow reassignment.
+                                  ⚠️ Cooperative has assigned this order to you.
+                                  Please accept to confirm your slot or decline
+                                  to allow reassignment.
                                 </div>
                                 <div className="flex gap-2">
                                   <Button
@@ -500,7 +654,8 @@ export function WorkerDashboard() {
                             {isAccepted && (
                               <div className="space-y-2">
                                 <p className="text-[11px] text-slate-500">
-                                  Assignment confirmed. When you start traveling to the customer site, tap below:
+                                  Assignment confirmed. When you start traveling
+                                  to the customer site, tap below:
                                 </p>
                                 <Button
                                   variant="primary"
@@ -508,28 +663,38 @@ export function WorkerDashboard() {
                                   loading={isProcessing}
                                   className="w-full"
                                   icon={Truck}
-                                  onClick={() => handleAdvanceStatus(job, 'ON_THE_WAY', 'Updated: You are now On The Way to the customer location!')}
+                                  onClick={() =>
+                                    handleAdvanceStatus(
+                                      job,
+                                      "ON_THE_WAY",
+                                      "Updated: You are now On The Way to the customer location!",
+                                    )
+                                  }
                                 >
                                   Start Journey (On The Way)
                                 </Button>
                               </div>
                             )}
 
-                            {/* PHASE 3: ON_THE_WAY -> Start Work */}
+                            {/* PHASE 3: ON_THE_WAY -> Start Work with OTP Handshake */}
                             {isOnTheWay && (
                               <div className="space-y-2">
-                                <p className="text-[11px] text-slate-500">
-                                  You are on the way. Once you arrive at the customer location and begin work, tap below:
-                                </p>
+                                <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-[11px] text-indigo-950 font-medium flex items-center justify-between">
+                                  <span>
+                                    📍 You are en-route. Upon doorstep arrival,
+                                    ask customer for their 6-digit verification
+                                    code.
+                                  </span>
+                                </div>
                                 <Button
                                   variant="primary"
                                   size="md"
                                   loading={isProcessing}
                                   className="w-full"
-                                  icon={Wrench}
-                                  onClick={() => handleAdvanceStatus(job, 'IN_PROGRESS', 'Updated: Work is now marked In Progress!')}
+                                  icon={Key}
+                                  onClick={() => handleOpenOtpModal(job)}
                                 >
-                                  Arrived & Start Work (In Progress)
+                                  Arrived at Site • Verify OTP & Start Work
                                 </Button>
                               </div>
                             )}
@@ -537,27 +702,38 @@ export function WorkerDashboard() {
                             {/* PHASE 4: IN_PROGRESS -> Complete Service */}
                             {isInProgress && (
                               <div className="space-y-2">
-                                <p className="text-[11px] text-slate-500">
-                                  Work underway. When service is finished and verified with the customer, tap to complete and release escrow:
-                                </p>
+                                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-950 font-medium">
+                                  ⚡ Service active & verified. When work is
+                                  finished to customer satisfaction, submit
+                                  completion note to release escrow payment.
+                                </div>
                                 <Button
                                   variant="primary"
                                   size="md"
                                   loading={isProcessing}
                                   className="w-full"
                                   icon={ShieldCheck}
-                                  onClick={() => handleAdvanceStatus(job, 'COMPLETED', 'Service Completed! Escrow has been authorized for direct DBT settlement.')}
+                                  onClick={() => handleOpenCompletionModal(job)}
                                 >
-                                  Mark Work Completed (Completed)
+                                  Complete Service & Request DBT Escrow Release
                                 </Button>
                               </div>
                             )}
 
                             {/* PHASE 5: COMPLETED */}
                             {isCompleted && (
-                              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center gap-2 font-semibold">
-                                <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                                <span>Service Completed • ₹{job.price?.totalAmount || 900} Settled via Escrow DBT</span>
+                              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-center justify-between font-semibold">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                                  <span>
+                                    Service Completed • ₹
+                                    {job.price?.totalAmount || 900} Settled via
+                                    DBT Escrow
+                                  </span>
+                                </div>
+                                <Badge variant="verified" size="sm">
+                                  Paid in Full
+                                </Badge>
                               </div>
                             )}
                           </div>
@@ -573,13 +749,199 @@ export function WorkerDashboard() {
       )}
 
       {/* Tab 2: Onboarding Wizard */}
-      {activeTab === 'onboarding' && (
+      {activeTab === "onboarding" && (
         <WorkerOnboardingWizard
           onComplete={() => {
             loadData();
-            setActiveTab('overview');
+            setActiveTab("overview");
           }}
         />
+      )}
+
+      {/* MODAL 1: OTP ARRIVAL VERIFICATION HANDSHAKE */}
+      {otpModalJob && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Key className="w-5 h-5 text-brand-saffron-600" />
+                  <span>Doorstep Arrival Verification</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Verify OTP with customer to confirm arrival & begin work
+                </p>
+              </div>
+              <button
+                onClick={() => setOtpModalJob(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs mb-4 space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Customer:</span>
+                <span className="font-bold text-slate-900">
+                  {otpModalJob.customerName ||
+                    otpModalJob.customer?.name ||
+                    "Customer"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Site Location:</span>
+                <span className="font-medium text-slate-800">
+                  {otpModalJob.location?.serviceAddress?.street},{" "}
+                  {otpModalJob.location?.serviceAddress?.city}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Service:</span>
+                <span className="font-bold text-brand-navy-900">
+                  {otpModalJob.serviceName}
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Enter 6-Digit Customer OTP Code
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  autoFocus
+                  required
+                  placeholder="6-digit code"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  value={enteredOtp}
+                  onChange={(e) => {
+                    setEnteredOtp(e.target.value);
+                    setOtpError(null);
+                  }}
+                  className="w-full text-center text-2xl font-mono font-extrabold tracking-widest px-4 py-3 rounded-2xl border border-slate-300 focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none"
+                />
+                <p className="text-[11px] text-slate-500 mt-1 text-center">
+                  Ask the customer for the 6-digit OTP shown on their ShramSetu
+                  app
+                </p>
+                {otpError && (
+                  <p className="text-xs text-red-600 font-bold mt-2 text-center bg-red-50 p-2 rounded-xl border border-red-200">
+                    {otpError}
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <Button
+                  variant="outline"
+                  size="md"
+                  className="flex-1"
+                  type="button"
+                  onClick={() => setOtpModalJob(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  type="submit"
+                  loading={
+                    isProcessingId === (otpModalJob.id || otpModalJob._id)
+                  }
+                  className="flex-1"
+                  icon={CheckCircle2}
+                >
+                  Confirm & Start Work
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: WORK COMPLETION & ESCROW SETTLEMENT */}
+      {completionModalJob && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                  <span>Complete Service & Request Settlement</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Finalize job execution and trigger direct DBT payout
+                </p>
+              </div>
+              <button
+                onClick={() => setCompletionModalJob(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs mb-4 space-y-1">
+              <div className="flex justify-between">
+                <span className="text-emerald-800">Direct Payout Amount:</span>
+                <span className="font-extrabold text-emerald-950 text-sm">
+                  ₹{completionModalJob.price?.totalAmount || 900} (100%)
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-700">
+                0% platform deductions. 100% credited to your registered bank
+                account / UPI via DBT.
+              </p>
+            </div>
+
+            <form onSubmit={handleCompleteServiceSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Completion Summary & Notes
+                </label>
+                <label className="block text-sm font-semibold mb-3">Completion code
+                    <input aria-label="Completion OTP" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={enteredOtp} onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))} placeholder="6-digit customer code" className="mt-2 w-full rounded-xl border p-3 font-mono" />
+                  </label>
+                  <textarea
+                  rows={3}
+                  placeholder="e.g. Completed fault diagnostics, installed new circuit breaker, tested load balance to customer satisfaction."
+                  value={completionNote}
+                  onChange={(e) => setCompletionNote(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <Button
+                  variant="outline"
+                  size="md"
+                  className="flex-1"
+                  type="button"
+                  onClick={() => setCompletionModalJob(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  type="submit"
+                  loading={
+                    isProcessingId ===
+                    (completionModalJob.id || completionModalJob._id)
+                  }
+                  className="flex-1"
+                  icon={CheckCircle2}
+                >
+                  Submit & Release Escrow
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

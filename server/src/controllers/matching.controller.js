@@ -9,8 +9,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 export const findNearbyMatches = asyncHandler(async (req, res) => {
   const params = req.method === 'POST' ? req.body : req.query;
 
-  const latitude = params.latitude || params.lat;
-  const longitude = params.longitude || params.lng || params.lon;
+  const latitude = params.latitude ?? params.lat;
+  const longitude = params.longitude ?? params.lng ?? params.lon;
   const skill = params.skill;
   const trade = params.trade || params.service;
   const availableOnly = params.availableOnly !== undefined
@@ -26,6 +26,8 @@ export const findNearbyMatches = asyncHandler(async (req, res) => {
     longitude,
     skill,
     trade,
+    query: params.query,
+    cooperativePreference: params.cooperativePreference,
     availableOnly,
     maxRadiusKm,
     sortBy,

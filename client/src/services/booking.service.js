@@ -1,6 +1,10 @@
 import apiClient from '../lib/apiClient';
 
 export const bookingService = {
+  async issueOtp(id, stage) { const response = await apiClient.post(`/bookings/${id}/${stage}-otp`); return response.data; },
+  async verifyOtp(id, stage, code) { const response = await apiClient.post(`/bookings/${id}/verify-${stage}-otp`, { code }); return response.data; },
+  async submitReview(data) { const response = await apiClient.post('/reviews', data); return response.data; },
+  async getReview(id) { const response = await apiClient.get(`/reviews/booking/${id}`); return response.data; },
   /**
    * Create a new booking request (Customer)
    */
@@ -12,12 +16,14 @@ export const bookingService = {
   /**
    * Discover suitable cooperatives and available artisans
    */
-  async getSuitableCooperativesAndWorkers({ serviceId, trade, city, pincode } = {}) {
+  async getSuitableCooperativesAndWorkers({ serviceId, trade, city, pincode, latitude, longitude } = {}) {
     const params = {};
     if (serviceId) params.serviceId = serviceId;
     if (trade) params.trade = trade;
     if (city) params.city = city;
     if (pincode) params.pincode = pincode;
+    if (latitude != null) params.latitude = latitude;
+    if (longitude != null) params.longitude = longitude;
     const response = await apiClient.get('/bookings/suitable', { params });
     return response.data || response;
   },

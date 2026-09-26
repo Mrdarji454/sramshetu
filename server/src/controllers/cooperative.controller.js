@@ -1,3 +1,4 @@
+import { publicBooking } from '../services/bookingVerification.service.js';
 import { CooperativeService } from '../services/cooperative.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
@@ -47,11 +48,13 @@ export const removeMember = asyncHandler(async (req, res) => {
 export const getIncomingRequests = asyncHandler(async (req, res) => {
   const cooperativeId = req.user.cooperativeId || req.user._id || req.user.id;
   const requests = await CooperativeService.getIncomingRequests(cooperativeId);
-  return successResponse(res, requests, 'Incoming work requests retrieved', 200);
+  return successResponse(res, requests.map(publicBooking), 'Incoming work requests retrieved', 200);
 });
 
 export const assignWorker = asyncHandler(async (req, res) => {
+  const cooperativeUserId = req.user.cooperativeId || req.user._id || req.user.id;
+  const role = req.user.role || 'COOPERATIVE';
   const { bookingId, workerId } = req.body;
-  const assignment = await CooperativeService.assignWorker(bookingId, workerId);
+  const assignment = await CooperativeService.assignWorker(bookingId, workerId, cooperativeUserId, role);
   return successResponse(res, assignment, 'Worker assigned successfully', 200);
 });

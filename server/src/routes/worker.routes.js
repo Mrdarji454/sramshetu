@@ -1,3 +1,4 @@
+import { workerProfile } from '../controllers/directory.controller.js';
 import { Router } from 'express';
 import { body } from 'express-validator';
 import * as workerController from '../controllers/worker.controller.js';
@@ -6,6 +7,7 @@ import { authorizeRoles } from '../middleware/role.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 
 const router = Router();
+router.get('/public/:id', workerProfile);
 
 // Protect all worker routes
 router.use(authenticate, authorizeRoles('worker', 'admin'));

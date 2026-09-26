@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import mongoose from 'mongoose';
 import { Booking } from '../models/Booking.model.js';
 import { User } from '../models/User.model.js';
@@ -25,7 +26,8 @@ export const inMemoryBookings = new Map();
 // Helper to normalize status to standard uppercase
 export function normalizeStatus(status) {
   if (!status) return 'PENDING';
-  return String(status).trim().toUpperCase();
+  const normalized = String(status).trim().toUpperCase();
+  return normalized === 'CONFIRMED' ? 'ACCEPTED' : normalized;
 }
 
 // Helper to normalize role
@@ -199,8 +201,7 @@ export class BookingService {
     const allowed = VALID_TRANSITIONS[cur] || [];
     if (!allowed.includes(tgt)) {
       throw new AppError(
-        `Invalid booking status transition from "${cur}" to "${tgt}". Allowed next transitions: ${
-          allowed.length ? allowed.join(', ') : 'None (Terminal state)'
+        `Invalid booking status transition from "${cur}" to "${tgt}". Allowed next transitions: ${allowed.length ? allowed.join(', ') : 'None (Terminal state)'
         }`,
         400
       );
@@ -243,202 +244,28 @@ export class BookingService {
   /**
    * Find suitable cooperatives and available workers for a service & location
    */
-  static async getSuitableCooperativesAndWorkers({ serviceId, trade, city, pincode }) {
-    // 1. Resolve service
-    let targetTrade = trade;
-    let targetService = null;
-    if (serviceId) {
-      targetService = await CatalogService.getServiceById(serviceId);
-      if (targetService) {
-        targetTrade = targetTrade || targetService.category || targetService.name;
-      }
-    }
-
-    const cleanCity = city ? String(city).trim() : 'Pune';
-    const cleanTrade = targetTrade ? String(targetTrade).trim() : 'Electrical & Power Systems';
-
-    // 2. Fetch cooperatives
-    let cooperatives = [];
-    if (mongoose.connection.readyState === 1) {
-      cooperatives = await Cooperative.find({
-        $or: [
-          { 'location.district': new RegExp(cleanCity, 'i') },
-          { 'location.operationalPincodes': pincode },
-          { serviceCategories: new RegExp(cleanTrade, 'i') },
-        ],
-      });
-    }
-
-    // Fallback in-memory cooperatives
-    if (!cooperatives || cooperatives.length === 0) {
-      cooperatives = [
-        {
-          _id: defaultCoopId,
-          id: defaultCoopId,
-          name: 'Pune Shramik Vikas Sahakari',
-          trustScore: 98.4,
-          location: {
-            district: 'Pune',
-            state: 'Maharashtra',
-            address: 'Shramik Bhavan, FC Road, Shivajinagar',
-          },
-          serviceCategories: [
-            'Electrical & Power Systems',
-            'Plumbing & Water Sanitation',
-            'Carpentry & Woodwork',
-            'Civil Construction & Masonry',
-          ],
-          memberCount: 24,
-          verificationStatus: 'verified',
-        },
-        {
-          _id: '65f123456789012345678904',
-          id: '65f123456789012345678904',
-          name: 'Maharashtra Karigar Mahasangh',
-          trustScore: 96.8,
-          location: {
-            district: 'Pune',
-            state: 'Maharashtra',
-            address: 'Artisan Hub, Kothrud Industrial Estate',
-          },
-          serviceCategories: [
-            'Electrical & Power Systems',
-            'Civil Construction & Masonry',
-            'Professional Painting & Surface Coating',
-          ],
-          memberCount: 42,
-          verificationStatus: 'verified',
-        },
-      ];
-    }
-
-    // 3. Assemble available workers
-    const availableWorkers = [
-      {
-        workerId: defaultWorkerId,
-        _id: defaultWorkerId,
-        id: defaultWorkerId,
-        name: 'Rajeshwar Shinde',
-        phone: '+91 98201 44019',
-        trade: 'Electrical & Power Systems',
-        primaryTrade: 'Electrical & Power Systems',
-        cooperativeId: defaultCoopId,
-        cooperativeName: 'Pune Shramik Vikas Sahakari',
-        experienceYears: 8,
-        rating: 4.94,
-        totalReviews: 84,
-        jobsCompleted: 462,
-        dailyFloorRate: 1300,
-        hourlyRate: 450,
-        isVerified: true,
-        aadhaarVerified: true,
-        nsdcCertified: true,
-        availabilityStatus: 'available',
-        city: 'Pune',
-        distanceKm: 2.4,
-      },
-      {
-        workerId: '65f123456789012345678905',
-        _id: '65f123456789012345678905',
-        id: '65f123456789012345678905',
-        name: 'Santosh Waghmare',
-        phone: '+91 98201 11223',
-        trade: 'Plumbing & Water Sanitation',
-        primaryTrade: 'Plumbing & Water Sanitation',
-        cooperativeId: defaultCoopId,
-        cooperativeName: 'Pune Shramik Vikas Sahakari',
-        experienceYears: 6,
-        rating: 4.88,
-        totalReviews: 61,
-        jobsCompleted: 310,
-        dailyFloorRate: 1150,
-        hourlyRate: 400,
-        isVerified: true,
-        aadhaarVerified: true,
-        nsdcCertified: true,
-        availabilityStatus: 'available',
-        city: 'Pune',
-        distanceKm: 3.8,
-      },
-      {
-        workerId: '65f123456789012345678906',
-        _id: '65f123456789012345678906',
-        id: '65f123456789012345678906',
-        name: 'Dattatray Pawar',
-        phone: '+91 98201 55667',
-        trade: 'Carpentry & Woodwork',
-        primaryTrade: 'Carpentry & Woodwork',
-        cooperativeId: defaultCoopId,
-        cooperativeName: 'Pune Shramik Vikas Sahakari',
-        experienceYears: 7,
-        rating: 4.91,
-        totalReviews: 53,
-        jobsCompleted: 198,
-        dailyFloorRate: 1200,
-        hourlyRate: 480,
-        isVerified: true,
-        aadhaarVerified: true,
-        nsdcCertified: true,
-        availabilityStatus: 'available',
-        city: 'Pune',
-        distanceKm: 4.1,
-      },
-      {
-        workerId: '65f123456789012345678907',
-        _id: '65f123456789012345678907',
-        id: '65f123456789012345678907',
-        name: 'Ganesh Shingate',
-        phone: '+91 98201 88990',
-        trade: 'Civil Construction & Masonry',
-        primaryTrade: 'Civil Construction & Masonry',
-        cooperativeId: '65f123456789012345678904',
-        cooperativeName: 'Maharashtra Karigar Mahasangh',
-        experienceYears: 9,
-        rating: 4.92,
-        totalReviews: 95,
-        jobsCompleted: 520,
-        dailyFloorRate: 1400,
-        hourlyRate: 550,
-        isVerified: true,
-        aadhaarVerified: true,
-        nsdcCertified: true,
-        availabilityStatus: 'available',
-        city: 'Pune',
-        distanceKm: 3.2,
-      },
-    ];
-
-    // Filter workers relevant to requested trade
-    const filteredWorkers = availableWorkers.filter((w) => {
-      if (!cleanTrade) return true;
-      const t = cleanTrade.toLowerCase();
-      return (
-        w.trade.toLowerCase().includes(t) ||
-        t.includes(w.trade.toLowerCase()) ||
-        w.primaryTrade.toLowerCase().includes(t)
-      );
+  static async getSuitableCooperativesAndWorkers({ serviceId, trade, city, pincode, latitude, longitude }) {
+    const service = serviceId ? await CatalogService.getServiceById(serviceId) : null;
+    const requestedTrade = trade || service?.category || service?.name || '';
+    const presets = { '411038': [73.8077, 18.5074], '411004': [73.8415, 18.5167], '411005': [73.8446, 18.5314], '411014': [73.9143, 18.5679], '411028': [73.9259, 18.5089] };
+    const fallback = presets[pincode] || [73.8567, 18.5204];
+    const { MatchingService } = await import('./matching.service.js');
+    const matches = await MatchingService.findNearbyMatches({
+      latitude: latitude ?? fallback[1], longitude: longitude ?? fallback[0],
+      trade: requestedTrade, city, availableOnly: true, maxRadiusKm: 30, sortBy: 'score',
     });
-
+    const workers = matches.workers.map(item => ({ ...item.worker, rating: item.rating,
+      cooperativeId: item.cooperative?.id || null, cooperativeName: item.cooperative?.name,
+      distanceKm: item.distance, availabilityStatus: item.availability.status,
+    }));
     return {
-      service: targetService || { name: cleanTrade, trade: cleanTrade },
-      location: { city: cleanCity, pincode: pincode || '411001' },
-      cooperatives: cooperatives.map((c) => ({
-        id: c._id || c.id,
-        _id: c._id || c.id,
-        name: c.name,
-        trustScore: c.trustScore || 96.0,
-        district: c.location?.district || c.district || cleanCity,
-        state: c.location?.state || c.state || 'Maharashtra',
-        memberCount: c.memberCount || 20,
-        verificationStatus: c.verificationStatus || 'verified',
-        serviceCategories: c.serviceCategories || [],
-      })),
-      workers: filteredWorkers.length > 0 ? filteredWorkers : availableWorkers,
+      service: service || { name: requestedTrade, trade: requestedTrade },
+      location: { city, pincode }, cooperatives: matches.cooperatives, workers,
       recommendedAllocation: {
-        cooperativeId: cooperatives[0]?._id || cooperatives[0]?.id || defaultCoopId,
-        cooperativeName: cooperatives[0]?.name || 'Pune Shramik Vikas Sahakari',
-        suggestedWorker: filteredWorkers[0] || availableWorkers[0],
-        algorithm: 'Fair AI Allocation (XGBoost Proximity & Workload Balance)',
+        cooperativeId: matches.cooperatives[0]?.id || null,
+        cooperativeName: matches.cooperatives[0]?.name || null,
+        suggestedWorker: workers[0] || null,
+        algorithm: matches.rankingEngine,
       },
     };
   }
@@ -452,6 +279,9 @@ export class BookingService {
       serviceId,
       serviceName,
       trade,
+      description = '',
+      workType = 'Repair & Troubleshooting',
+      photos = [],
       location,
       scheduledTime,
       cooperativeId,
@@ -463,8 +293,8 @@ export class BookingService {
     if (!location?.serviceAddress?.city || !location?.serviceAddress?.street) {
       throw new AppError('Service address with street and city is required', 400);
     }
-    if (!scheduledTime?.start) {
-      throw new AppError('Preferred scheduled date/time is required', 400);
+    if (!scheduledTime?.start || isNaN(new Date(scheduledTime.start).getTime())) {
+      throw new AppError('A valid preferred scheduled start date/time is required', 400);
     }
 
     // Resolve service catalog item if serviceId passed
@@ -490,23 +320,64 @@ export class BookingService {
       resolvedTrade = resolvedServiceName;
     }
 
-    // Generate secure QR Token and 4-digit verification OTP
-    const uniqueHash = Math.random().toString(36).substring(2, 6).toUpperCase();
+    // Keep the existing QR reference; work OTPs are issued separately on demand.
+    const uniqueHash = randomBytes(16).toString('hex');
     const qrToken = `QR-SS-${Date.now().toString(36).toUpperCase()}-${uniqueHash}`;
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const otpCode = null;
 
-    // Default target cooperative
-    const assignedCoopId = cooperativeId || defaultCoopId;
+    // Distinct paths: Direct Worker vs Cooperative Assignment
+    const isDirectWorkerBooking = Boolean(workerId);
+    const assignedCoopId = cooperativeId || (isDirectWorkerBooking ? null : defaultCoopId);
+    const initialStatus = isDirectWorkerBooking ? 'ASSIGNED' : 'PENDING';
 
     // Fetch customer details
     let customerName = 'Customer';
-    let customerPhone = '+91 98000 00000';
+    let customerPhone = '';
+    let customerEmail = '';
+    let workerName = '';
+    let workerPhone = '';
+    let cooperativeName = '';
     if (mongoose.connection.readyState === 1) {
       const u = await User.findById(cleanCustomerId);
       if (u) {
         customerName = u.name;
         customerPhone = u.phone;
+        customerEmail = u.email;
       }
+    }
+
+    if (mongoose.connection.readyState === 1) {
+      if (workerId) {
+        if (!mongoose.isValidObjectId(workerId)) throw new AppError('Invalid worker reference', 400);
+        const profile = await Worker.findOne({ $or: [{ _id: workerId }, { user: workerId }] }).populate('user', 'name phone');
+        if (!profile) throw new AppError('Selected worker was not found', 404);
+        if (profile.availability?.status !== 'available') throw new AppError('Selected worker is currently unavailable', 409);
+        workerName = profile.user?.name || '';
+        workerPhone = profile.user?.phone || '';
+      }
+      if (assignedCoopId) {
+        if (!mongoose.isValidObjectId(assignedCoopId)) throw new AppError('Invalid cooperative reference', 400);
+        const cooperative = await Cooperative.findById(assignedCoopId);
+        if (!cooperative) throw new AppError('Selected cooperative was not found', 404);
+        cooperativeName = cooperative.name;
+      }
+    } else {
+      const { inMemoryWorkers } = await import('./worker.service.js');
+      const { inMemoryCooperatives } = await import('./cooperative.service.js');
+      const profile = [...inMemoryWorkers.values()].find(w => String(w._id || w.id) === String(workerId));
+      workerName = profile?.name || '';
+      workerPhone = profile?.phone || '';
+      cooperativeName = [...inMemoryCooperatives.values()].find(c => String(c._id || c.id) === String(assignedCoopId))?.name || '';
+    }
+
+    // Preserve exact [longitude, latitude] coordinates
+    let cleanCoords = [0, 0];
+    if (Array.isArray(location.coordinates) && location.coordinates.length === 2) {
+      const lon = Number(location.coordinates[0]);
+      const lat = Number(location.coordinates[1]);
+      if (Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90) {
+        cleanCoords = [lon, lat];
+      } else throw new AppError("Invalid location coordinates", 400);
     }
 
     const bookingPayload = {
@@ -514,21 +385,28 @@ export class BookingService {
       customerId: cleanCustomerId,
       customerName,
       customerPhone,
+      customerEmail,
+      workerName,
+      workerPhone,
+      cooperativeName,
       cooperative: assignedCoopId,
       cooperativeId: assignedCoopId,
-      worker: workerId || null,
-      workerId: workerId || null,
+      worker: isDirectWorkerBooking ? workerId : null,
+      workerId: isDirectWorkerBooking ? workerId : null,
       service: serviceId || null,
       serviceName: resolvedServiceName,
       trade: resolvedTrade,
+      description: (description || '').trim(),
+      workType: workType || 'Repair & Troubleshooting',
+      photos: Array.isArray(photos) ? photos : [],
       location: {
         type: 'Point',
-        coordinates: location.coordinates || [73.8567, 18.5204],
+        coordinates: cleanCoords,
         serviceAddress: {
           street: location.serviceAddress.street,
           city: location.serviceAddress.city,
           state: location.serviceAddress.state || 'Maharashtra',
-          pincode: location.serviceAddress.pincode || '411001',
+          pincode: location.serviceAddress.pincode || '',
           landmark: location.serviceAddress.landmark || '',
         },
       },
@@ -536,21 +414,23 @@ export class BookingService {
         start: new Date(scheduledTime.start),
         end: scheduledTime.end ? new Date(scheduledTime.end) : new Date(new Date(scheduledTime.start).getTime() + 7200000),
       },
-      status: workerId ? 'ASSIGNED' : 'PENDING',
+      status: initialStatus,
+      trackingStatus: initialStatus,
+      customerLocation: cleanCoords.some(value => value !== 0) ? cleanCoords : undefined,
       price: {
         floorRateAmount: Number(floorRate),
         totalAmount: Number(totalAmount),
         commissionCut: 0,
         currency: 'INR',
       },
-      paymentStatus: 'escrow_locked',
+      paymentStatus: 'pending', // Accurate actual state: payment pending authorization
       qrVerification: {
         token: qrToken,
         otpCode,
         isVerified: false,
         verifiedAt: null,
       },
-      specialInstructions: specialInstructions.trim(),
+      specialInstructions: (specialInstructions || '').trim(),
       rejectionReason: null,
       statusHistory: [
         {
@@ -558,20 +438,24 @@ export class BookingService {
           updatedBy: cleanCustomerId,
           role: 'USER',
           timestamp: new Date(),
-          note: 'Booking request created with zero-middleman escrow guarantee',
+          note: isDirectWorkerBooking
+            ? 'Direct artisan booking created - awaiting artisan confirmation'
+            : 'Cooperative assignment requested - awaiting society dispatch',
         },
       ],
     };
 
-    if (workerId) {
+    if (isDirectWorkerBooking) {
       bookingPayload.statusHistory.push({
         status: 'ASSIGNED',
         updatedBy: cleanCustomerId,
         role: 'USER',
         timestamp: new Date(),
-        note: 'Customer pre-selected artisan',
+        note: `Direct artisan pre-selection (Worker ID: ${workerId})`,
       });
     }
+
+    bookingPayload.timelineEvents = [...bookingPayload.statusHistory];
 
     // Save in MongoDB if connected
     if (mongoose.connection.readyState === 1) {
@@ -580,7 +464,7 @@ export class BookingService {
     }
 
     // Save in memory
-    const newId = `BK-${Date.now().toString().slice(-4)}`;
+    const newId = `BK-${randomBytes(8).toString('hex')}`;
     const mongoMockId = new mongoose.Types.ObjectId().toString();
     const created = {
       ...bookingPayload,
@@ -606,7 +490,18 @@ export class BookingService {
       if (normRole === 'USER') {
         filter.$or = [{ customer: cleanUserId }, { customerId: cleanUserId }];
       } else if (normRole === 'WORKER') {
-        filter.$or = [{ worker: cleanUserId }, { workerId: cleanUserId }];
+        // Find worker profile if exists
+        const wp = await Worker.findOne({ $or: [{ user: cleanUserId }, { _id: cleanUserId }] }).catch(() => null);
+        const wpId = wp ? String(wp._id) : null;
+
+        const workerOrs = [
+          { worker: cleanUserId },
+          { workerId: cleanUserId },
+        ];
+        if (wpId) {
+          workerOrs.push({ worker: wpId }, { workerId: wpId });
+        }
+        filter.$or = workerOrs;
       } else if (normRole === 'COOPERATIVE') {
         const coopId = cooperativeId || cleanUserId;
         filter.$or = [{ cooperative: coopId }, { cooperativeId: coopId }];
@@ -619,12 +514,14 @@ export class BookingService {
 
       return Booking.find(filter)
         .populate('customer', 'name phone email')
-        .populate('worker', 'name phone experience rating')
+
         .populate('cooperative', 'name location')
         .sort({ createdAt: -1 });
     }
 
     // In-memory filter
+    const { inMemoryWorkers } = await import('./worker.service.js');
+    const actorWorkerIds = [...inMemoryWorkers.values()].filter(w => String(w.user?._id || w.user || w.userId) === cleanUserId).map(w => String(w._id || w.id));
     const seen = new Set();
     const result = [];
     for (const [, b] of inMemoryBookings) {
@@ -635,14 +532,22 @@ export class BookingService {
       // Role filter
       if (normRole === 'USER') {
         if (String(b.customer) !== cleanUserId && String(b.customerId) !== cleanUserId) {
-          // Allow in mock if user matches default or mock customer
-          if (cleanUserId !== defaultCustomerId && String(b.customer) !== defaultCustomerId) {
-            continue;
-          }
+          continue;
         }
       } else if (normRole === 'WORKER') {
-        if (String(b.worker) !== cleanUserId && String(b.workerId) !== cleanUserId) {
-          if (cleanUserId !== defaultWorkerId && String(b.worker) !== defaultWorkerId) {
+        const matchDirect = String(b.worker) === cleanUserId || String(b.workerId) === cleanUserId || actorWorkerIds.includes(String(b.worker));
+        const matchDefault =
+          (cleanUserId === defaultWorkerId || cleanUserId === 'W-MH-4019') &&
+          (String(b.worker) === defaultWorkerId ||
+            String(b.workerId) === defaultWorkerId ||
+            String(b.worker) === 'W-MH-4019' ||
+            String(b.workerId) === 'W-MH-4019' ||
+            b.workerName === 'Rajeshwar Shinde');
+
+        // If not directly matched, check if worker is assigned
+        if (!matchDirect && !matchDefault) {
+          // If cleanUserId is a newly created worker session and the booking was assigned to this worker
+          if (b.worker !== cleanUserId && b.workerId !== cleanUserId) {
             continue;
           }
         }
@@ -692,7 +597,7 @@ export class BookingService {
       if (mongoose.Types.ObjectId.isValid(cleanId)) {
         booking = await Booking.findById(cleanId)
           .populate('customer', 'name phone email')
-          .populate('worker', 'name phone experience rating')
+
           .populate('cooperative', 'name location');
       }
     }
@@ -713,6 +618,24 @@ export class BookingService {
       throw new AppError('Booking request not found', 404);
     }
 
+    if (userId && normalizeRole(role) !== 'ADMIN') {
+      const actor = String(userId);
+      const ref = value => String(value?._id || value || '');
+      let allowed = false;
+      if (normalizeRole(role) === 'USER') allowed = ref(booking.customer) === actor || ref(booking.customerId) === actor;
+      if (normalizeRole(role) === 'WORKER') {
+        allowed = ref(booking.worker) === actor || ref(booking.workerId) === actor;
+        if (!allowed && mongoose.connection.readyState === 1) {
+          const profile = await Worker.findOne({ user: actor }).select('_id');
+          allowed = Boolean(profile && ref(booking.worker) === String(profile._id));
+        } else if (!allowed) {
+          const { inMemoryWorkers } = await import('./worker.service.js');
+          allowed = [...inMemoryWorkers.values()].some(w => ref(w.user || w.userId) === actor && ref(w._id || w.id) === ref(booking.worker));
+        }
+      }
+      if (normalizeRole(role) === 'COOPERATIVE') allowed = ref(booking.cooperative) === actor || ref(booking.cooperativeId) === actor;
+      if (!allowed) throw new AppError('You do not have access to this booking', 403);
+    }
     return booking;
   }
 
@@ -732,13 +655,41 @@ export class BookingService {
     let workerTrade = booking.trade;
 
     if (mongoose.connection.readyState === 1) {
-      const w = await User.findById(workerId);
+      // Try finding by User model first, then Worker model
+      const w = await User.findById(workerId).catch(() => null);
       if (w) {
         workerName = w.name;
         workerPhone = w.phone;
+      } else {
+        const wp = await Worker.findById(workerId).populate('user', 'name phone').catch(() => null);
+        if (wp) {
+          workerName = wp.user?.name || workerName;
+          workerPhone = wp.user?.phone || workerPhone;
+          workerTrade = wp.experience?.primaryTrade || workerTrade;
+        }
       }
     } else {
-      if (workerId === defaultWorkerId) {
+      // In-memory: Search cooperative member rosters for matching workerId
+      let resolved = false;
+
+      // Import in-memory cooperatives to search member rosters
+      const { inMemoryCooperatives } = await import('./cooperative.service.js');
+      for (const [, coop] of inMemoryCooperatives) {
+        if (!coop.members) continue;
+        const member = coop.members.find(
+          (m) => String(m.id) === String(workerId) || String(m._id) === String(workerId)
+        );
+        if (member) {
+          workerName = member.name;
+          workerPhone = member.phone || workerPhone;
+          workerTrade = member.trade || workerTrade;
+          resolved = true;
+          break;
+        }
+      }
+
+      // Fallback to hardcoded default
+      if (!resolved && workerId === defaultWorkerId) {
         workerName = 'Rajeshwar Shinde';
         workerPhone = '+91 98201 44019';
         workerTrade = 'Electrical & Power Systems';
@@ -754,19 +705,23 @@ export class BookingService {
     };
 
     if (mongoose.connection.readyState === 1) {
-      const updated = await Booking.findByIdAndUpdate(
-        booking._id || booking.id,
+      const updated = await Booking.findOneAndUpdate(
+        { _id: booking._id || booking.id, status: booking.status },
         {
           $set: {
             worker: workerId,
             workerId: workerId,
+            workerName,
+            workerPhone,
             status: 'ASSIGNED',
+            trackingStatus: 'ASSIGNED',
             rejectionReason: null,
           },
-          $push: { statusHistory: historyEntry },
+          $push: { statusHistory: historyEntry, timelineEvents: historyEntry },
         },
         { new: true }
       );
+      if (!updated) throw new AppError('Booking changed; refresh before retrying', 409);
       return updated;
     }
 
@@ -776,9 +731,11 @@ export class BookingService {
     booking.workerName = workerName;
     booking.workerPhone = workerPhone;
     booking.status = 'ASSIGNED';
+    booking.trackingStatus = 'ASSIGNED';
     booking.rejectionReason = null;
     if (!booking.statusHistory) booking.statusHistory = [];
     booking.statusHistory.push(historyEntry);
+    (booking.timelineEvents ||= []).push(historyEntry);
     booking.updatedAt = new Date().toISOString();
 
     inMemoryBookings.set(String(booking._id), booking);
@@ -795,6 +752,8 @@ export class BookingService {
     const currentStatus = normalizeStatus(booking.status);
     const targetStatus = normalizeStatus(newStatus);
 
+    if (['IN_PROGRESS', 'COMPLETED'].includes(targetStatus)) throw new AppError('Use customer OTP verification to start or complete work', 403);
+
     // Perform state machine transition validation
     this.validateTransition(currentStatus, targetStatus, role, userId, booking);
 
@@ -808,6 +767,7 @@ export class BookingService {
 
     const updateFields = {
       status: targetStatus,
+      trackingStatus: targetStatus,
     };
 
     if (targetStatus === 'REJECTED') {
@@ -832,14 +792,15 @@ export class BookingService {
     }
 
     if (mongoose.connection.readyState === 1) {
-      const updated = await Booking.findByIdAndUpdate(
-        booking._id || booking.id,
+      const updated = await Booking.findOneAndUpdate(
+        { _id: booking._id || booking.id, status: booking.status },
         {
           $set: updateFields,
-          $push: { statusHistory: historyEntry },
+          $push: { statusHistory: historyEntry, timelineEvents: historyEntry },
         },
         { new: true }
       );
+      if (!updated) throw new AppError('Booking changed; refresh before retrying', 409);
       return updated;
     }
 
@@ -847,6 +808,7 @@ export class BookingService {
     Object.assign(booking, updateFields);
     if (!booking.statusHistory) booking.statusHistory = [];
     booking.statusHistory.push(historyEntry);
+    (booking.timelineEvents ||= []).push(historyEntry);
     booking.updatedAt = new Date().toISOString();
 
     inMemoryBookings.set(String(booking._id), booking);

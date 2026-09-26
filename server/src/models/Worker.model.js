@@ -167,6 +167,8 @@ const workerSchema = new mongoose.Schema(
         default: 'INR',
       },
     },
+    serviceRadius: { type: Number, min: 1, max: 100 },
+    liveLocation: { coordinates: { type: [Number], default: undefined }, updatedAt: Date },
     jobsCompleted: {
       type: Number,
       default: 0,

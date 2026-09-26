@@ -1,4 +1,6 @@
+import { ServiceSearch } from '../matching/ServiceSearch';
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import {
@@ -10,36 +12,79 @@ import {
   ArrowRight,
   CheckCircle2,
   Activity,
-  QrCode,
   Users,
   IndianRupee,
+  Clock,
+  Zap,
+  Droplets,
+  Hammer,
+  Boxes,
+  Paintbrush,
+  Wind,
+  Flame,
+  Wrench,
 } from "lucide-react";
-import { SERVICE_CATEGORIES } from "../../data/mockData";
+import { matchingService } from "../../services/matching.service";
+import {
+  POPULAR_PROFESSIONS,
+  detectTradeFromJobDescription,
+} from "../../utils/tradeUtils";
+import { LOCALITY_PRESETS } from "../../utils/geo.utils";
+
+const PROFESSION_ICONS = {
+  electrical: Zap,
+  plumbing: Droplets,
+  carpentry: Hammer,
+  masonry: Boxes,
+  painting: Paintbrush,
+  hvac: Wind,
+  welding: Flame,
+};
 
 export function HeroSection() {
-  const [selectedTrade, setSelectedTrade] = useState("electrical");
+  const navigate = useNavigate();
+  const [jobDescription, setJobDescription] = useState("");
+  const [selectedTrade, setSelectedTrade] = useState("all");
   const [pincode, setPincode] = useState("411038");
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulatedMatch, setSimulatedMatch] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [matchedResult, setMatchedResult] = useState(null);
+  const [detectedTrade, setDetectedTrade] = useState(null);
 
-  const handleSimulateSearch = (e) => {
-    e.preventDefault();
-    setIsSimulating(true);
-    setTimeout(() => {
-      setIsSimulating(false);
-      const selected =
-        SERVICE_CATEGORIES.find((c) => c.id === selectedTrade) ||
-        SERVICE_CATEGORIES[0];
-      setSimulatedMatch({
-        serviceName: selected.name,
-        pincode: pincode || "411038",
-        allocatedWorker: "Rajeshwar Shinde",
-        cooperative: "Pune Shramik Vikas Sahakari",
-        eta: "11 mins",
-        fairFloorWage: selected.floorRate,
-        score: "98.4%",
-      });
-    }, 600);
+  // Handle free-text job description changes and detect NLP trade intent
+  const handleDescriptionChange = (e) => {
+    const text = e.target.value;
+    setJobDescription(text);
+    const detected = detectTradeFromJobDescription(text);
+    setDetectedTrade(detected);
+    if (detected && selectedTrade === "all") {
+      setSelectedTrade(detected.id);
+    }
+  };
+
+  // Perform real search against server matching API
+  const handleFindWorker = async (e) => {
+    if (e) e.preventDefault();
+    handleNavigateToMatcher();
+  };
+
+  // Click on a profession category chip
+  const handleSelectCategory = (prof) => {
+    setSelectedTrade(prof.id);
+    navigate(
+      `/user/dashboard?tab=match&trade=${encodeURIComponent(prof.tradeName)}&pincode=${pincode}`,
+    );
+  };
+
+  // Navigate to live matching view carrying search parameters
+  const handleNavigateToMatcher = () => {
+    const tradeObj = POPULAR_PROFESSIONS.find((p) => p.id === selectedTrade);
+    const tradeParam = tradeObj?.tradeName || "";
+    const params = new URLSearchParams();
+    params.set("tab", "match");
+    if (tradeParam) params.set("trade", tradeParam);
+    if (pincode) params.set("pincode", pincode);
+    if (jobDescription) params.set("desc", jobDescription);
+    navigate(`/user/dashboard?${params.toString()}`);
   };
 
   return (
@@ -107,108 +152,164 @@ export function HeroSection() {
           </div>
         </div>
 
-        {/* Interactive Booking & AI Dispatch Widget */}
-        <div className="max-w-4xl mx-auto mb-12">
-          <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl border border-slate-200/90 ring-1 ring-slate-900/5">
-            <form
-              onSubmit={handleSimulateSearch}
-              className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 items-center"
-            >
-              {/* Trade Selector */}
-              <div className="sm:col-span-5 text-left">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Select Skilled Trade
-                </label>
-                <div className="relative">
+        {/* Interactive Search & Discovery Widget */}
+        <div className="max-w-4xl mx-auto mb-8">
+          <div className="bg-white rounded-3xl p-5 sm:p-7 shadow-xl border border-slate-200/90 ring-1 ring-slate-900/5 space-y-4">
+            <form onSubmit={handleFindWorker} className="space-y-3">
+              {/* Natural Language Job Description / Prompt Input */}
+              <div className="relative">
+                <ServiceSearch value={jobDescription} onChange={text => { setJobDescription(text); setDetectedTrade(detectTradeFromJobDescription(text)); setSelectedTrade('all'); }} onSearch={text => navigate(`/user/dashboard?tab=match&desc=${encodeURIComponent(text)}&pincode=${pincode}`)} />
+
+              </div>
+
+              {/* Detected Trade Suggestion Pill */}
+              {detectedTrade && (
+                <div className="flex items-center gap-2 p-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold animate-in fade-in">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                  <span>
+                    Detected Relevant Trade:{" "}
+                    <strong className="text-amber-950 underline">
+                      {detectedTrade.tradeName}
+                    </strong>{" "}
+                    ({detectedTrade.hindiName})
+                  </span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pt-1">
+                {/* Trade Selector Dropdown */}
+                <div className="sm:col-span-5 text-left">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Select Skilled Profession
+                  </label>
                   <select
                     value={selectedTrade}
                     onChange={(e) => setSelectedTrade(e.target.value)}
-                    className="w-full pl-3.5 pr-10 py-3 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none focus:bg-white transition-all"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-xs font-semibold focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none focus:bg-white"
                   >
-                    {SERVICE_CATEGORIES.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name} ({cat.hindiName})
+                    <option value="all">All Registered Trades</option>
+                    {POPULAR_PROFESSIONS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.tradeName} ({p.hindiName})
                       </option>
                     ))}
                   </select>
                 </div>
-              </div>
 
-              {/* Location / Pincode */}
-              <div className="sm:col-span-4 text-left">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Pincode / Location
-                </label>
-                <div className="relative flex items-center">
-                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={pincode}
-                    onChange={(e) => setPincode(e.target.value)}
-                    placeholder="e.g. 411038 (Pune) or 110020"
-                    className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-900 text-sm font-medium focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none focus:bg-white transition-all"
-                  />
+                {/* Location / Pincode */}
+                <div className="sm:col-span-4 text-left">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Service Locality / Pincode
+                  </label>
+                  <div className="relative flex items-center">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value)}
+                      placeholder="e.g. 411038 (Pune)"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-xs font-semibold focus:ring-2 focus:ring-brand-saffron-500 focus:outline-none focus:bg-white"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Submit CTA */}
-              <div className="sm:col-span-3 sm:self-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  disabled={isSimulating}
-                  className="w-full py-3 h-[46px]"
-                  icon={isSimulating ? Sparkles : Search}
-                >
-                  {isSimulating ? "AI Matching..." : "Find Worker"}
-                </Button>
+                {/* Submit Find Worker CTA */}
+                <div className="sm:col-span-3 sm:self-end">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="md"
+                    loading={isSearching}
+                    className="w-full py-2.5 h-[42px]"
+                    icon={Search}
+                  >
+                    Find Artisans
+                  </Button>
+                </div>
               </div>
             </form>
 
-            {/* Instant AI Allocation Result Simulation Box */}
-            {simulatedMatch && (
-              <div className="mt-4 pt-4 border-t border-slate-100 bg-emerald-50/50 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs animate-in fade-in duration-200">
+            {/* Clickable Profession Categories Pills */}
+            <div className="pt-3 border-t border-slate-100">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2 text-left">
+                Popular Verified Trades (Click to filter):
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {POPULAR_PROFESSIONS.map((prof) => {
+                  const Icon = PROFESSION_ICONS[prof.id] || Wrench;
+                  const isSelected = selectedTrade === prof.id;
+
+                  return (
+                    <button
+                      key={prof.id}
+                      type="button"
+                      onClick={() => handleSelectCategory(prof)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs ${
+                        isSelected
+                          ? "bg-brand-navy-900 text-white shadow-sm ring-2 ring-brand-navy-400"
+                          : "bg-slate-100/90 text-slate-700 hover:bg-slate-200 hover:text-slate-950 border border-slate-200"
+                      }`}
+                    >
+                      <Icon
+                        className={`w-3.5 h-3.5 ${isSelected ? "text-amber-400" : "text-brand-saffron-600"}`}
+                      />
+                      <span>{prof.shortName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Real Server Match Live Result Card */}
+            {matchedResult && (
+              <div className="mt-4 pt-4 border-t border-slate-100 bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs animate-in fade-in duration-200">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold">
-                    <CheckCircle2 className="w-5 h-5" />
+                  <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+                    {matchedResult.worker?.name?.charAt(0) || "A"}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-emerald-950 text-sm">
-                        {simulatedMatch.allocatedWorker}
+                      <span className="font-extrabold text-emerald-950 text-sm">
+                        {matchedResult.worker?.name}
                       </span>
                       <Badge variant="verified" size="sm">
-                        Available Now
+                        Verified
                       </Badge>
+                      <span className="text-amber-600 font-bold text-[11px]">
+                        ★ {matchedResult.rating}
+                      </span>
                     </div>
                     <p className="text-slate-600 mt-0.5">
                       Guild:{" "}
-                      <span className="font-semibold text-slate-800">
-                        {simulatedMatch.cooperative}
-                      </span>{" "}
-                      • ETA:{" "}
-                      <span className="text-emerald-700 font-bold">
-                        {simulatedMatch.eta}
-                      </span>
+                      <strong className="text-slate-900">
+                        {matchedResult.cooperative?.name}
+                      </strong>{" "}
+                      • Distance:{" "}
+                      <strong className="text-emerald-700">
+                        {matchedResult.distanceFormatted}
+                      </strong>{" "}
+                      (~{matchedResult.estimatedArrivalMin} min)
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                  <div className="text-right">
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-emerald-200">
+                  <div className="text-left sm:text-right">
                     <span className="text-[10px] uppercase tracking-wider text-slate-500 block">
-                      Guaranteed Floor Wage
+                      Floor Wage (0% Commission)
                     </span>
-                    <span className="font-bold text-slate-900 text-sm">
-                      {simulatedMatch.fairFloorWage}
+                    <span className="font-extrabold text-slate-900 text-sm">
+                      ₹{matchedResult.floorRate} / day
                     </span>
                   </div>
-                  <a href="#workers">
-                    <Button size="sm" variant="emerald">
-                      View Profile & QR
-                    </Button>
-                  </a>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={ArrowRight}
+                    onClick={handleNavigateToMatcher}
+                  >
+                    View on Live Map
+                  </Button>
                 </div>
               </div>
             )}
@@ -229,36 +330,36 @@ export function HeroSection() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-sm sm:text-base font-display">
-                      ShramSetu AI Dispatch Engine (XGBoost v2.4)
+                      ShramSetu Multi-Factor Ranking & Fair Rotation Engine
                     </h3>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      LIVE INFERENCE
+                      DETERMINISTIC RANKING
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    FastAPI ML Service • Latency: 14.2ms • Anti-Monopoly
-                    Rotation Active
+                    Skills • Proximity • Verification • Fair Rotation (1:4
+                    Verified New Talent)
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
                 <Activity className="w-3.5 h-3.5 animate-pulse" />
-                <span>Fairness Score: 98.6%</span>
+                <span>Fairness Rotation Active</span>
               </div>
             </div>
 
-            {/* Real-time Simulated Telemetry Feed */}
+            {/* Real-time Telemetry Feed */}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80">
                 <span className="text-[11px] text-slate-400 block mb-1">
-                  Last Job Allocated
+                  Ranking Engine
                 </span>
                 <span className="font-semibold text-slate-100">
-                  3-Phase Substation Repair
+                  Multi-Factor Deterministic
                 </span>
                 <p className="text-[11px] text-emerald-400 mt-1">
-                  Matched in 4.2s • Pune Guild
+                  Zero commission bidding
                 </p>
               </div>
 
@@ -267,10 +368,10 @@ export function HeroSection() {
                   Opportunity Distribution
                 </span>
                 <span className="font-semibold text-slate-100">
-                  Equal Rota Weighted
+                  Equal Rota (1:4 New Artisans)
                 </span>
                 <p className="text-[11px] text-brand-saffron-300 mt-1">
-                  0% algorithmic favouritism
+                  0% algorithmic bias
                 </p>
               </div>
 

@@ -122,6 +122,7 @@ const cooperativeSchema = new mongoose.Schema(
         },
       ],
     },
+    rating: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 } },
     trustScore: {
       type: Number,
       default: 95.0,

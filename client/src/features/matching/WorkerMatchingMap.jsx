@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+
 /**
  * Custom Leaflet Map for Location-Based Worker Matching
  * Features OpenStreetMap tiles, custom HTML DivIcons, radius circle overlays,
@@ -135,12 +137,12 @@ export function WorkerMatchingMap({
       const coopPopupHtml = `
         <div style="font-family: inherit; font-size: 12px; min-width: 180px; padding: 4px;">
           <div style="color: #4F46E5; font-size: 10px; font-weight: 700; text-transform: uppercase;">Registered Cooperative</div>
-          <strong style="color: #0F172A; font-size: 13px; display: block; margin: 2px 0 4px 0;">${coop.name}</strong>
+          <strong style="color: #0F172A; font-size: 13px; display: block; margin: 2px 0 4px 0;">${escapeHtml(coop.name)}</strong>
           <div style="color: #64748B; font-size: 11px;">
-            Distance: <strong>${coop.distanceFormatted || "Nearby"}</strong> • Trust: <strong style="color: #059669;">${coop.trustScore || 96}%</strong>
+            Distance: <strong>${escapeHtml(coop.distanceFormatted || "Nearby")}</strong> • Trust: <strong style="color: #059669;">${coop.trustScore || 96}%</strong>
           </div>
           <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #E2E8F0; font-size: 10px; color: #475569;">
-            ${coop.district || "Pune"}, ${coop.state || "Maharashtra"}
+            ${escapeHtml(coop.district || "Pune")}, ${escapeHtml(coop.state || "Maharashtra")}
           </div>
         </div>
       `;
@@ -214,15 +216,15 @@ export function WorkerMatchingMap({
             </span>
           </div>
 
-          <strong style="color: #0F172A; font-size: 14px; display: block;">${worker.name}</strong>
+          <strong style="color: #0F172A; font-size: 14px; display: block;">${escapeHtml(worker.name)}</strong>
           <div style="color: #475569; font-size: 11px; margin-bottom: 6px;">
-            ${worker.primaryTrade || worker.trade} • ★ ${item.rating} (${item.ratingCount || 40})
+            ${escapeHtml(worker.primaryTrade || worker.trade)} • ★ ${item.rating} (${item.ratingCount || 40})
           </div>
 
           <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 6px; margin-bottom: 8px; font-size: 11px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
               <span style="color: #64748B;">Guild:</span>
-              <strong style="color: #1E293B;">${item.cooperative?.name || "Local Cooperative"}</strong>
+              <strong style="color: #1E293B;">${escapeHtml(item.cooperative?.name || "Local Cooperative")}</strong>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span style="color: #64748B;">Floor Rate:</span>

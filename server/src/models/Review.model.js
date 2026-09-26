@@ -38,6 +38,9 @@ const reviewSchema = new mongoose.Schema(
       max: [5, 'Rating cannot exceed 5'],
       index: true,
     },
+    feedback: { type: String, trim: true, maxlength: 1000, default: '' },
+    tags: [{ type: String, enum: ['On Time', 'Skilled', 'Professional', 'Affordable', 'Friendly'] }],
+    cooperativeRating: { type: Number, min: 1, max: 5 },
     comment: {
       type: String,
       trim: true,
@@ -107,8 +110,8 @@ reviewSchema.statics.calcAverageRatings = async function (workerId) {
 };
 
 // Post-save hook to recalculate rating
-reviewSchema.post('save', function () {
-  this.constructor.calcAverageRatings(this.worker);
+reviewSchema.post('save', async function () {
+  await this.constructor.calcAverageRatings(this.worker);
 });
 
 export const Review = mongoose.model('Review', reviewSchema);

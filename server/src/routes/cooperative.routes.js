@@ -1,3 +1,4 @@
+import { cooperativeProfile } from '../controllers/directory.controller.js';
 import { Router } from 'express';
 import { body } from 'express-validator';
 import * as cooperativeController from '../controllers/cooperative.controller.js';
@@ -6,6 +7,7 @@ import { authorizeRoles } from '../middleware/role.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 
 const router = Router();
+router.get('/public/:id', cooperativeProfile);
 
 // Public / general directory of cooperatives
 router.get('/list', cooperativeController.getCooperativesList);

@@ -1,3 +1,4 @@
+import { publicBooking } from '../services/bookingVerification.service.js';
 import { WorkerService } from '../services/worker.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
@@ -40,5 +41,5 @@ export const getVerificationStatus = asyncHandler(async (req, res) => {
 export const getAssignedJobs = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const jobs = await WorkerService.getAssignedJobs(userId);
-  return successResponse(res, jobs, 'Assigned jobs retrieved', 200);
+  return successResponse(res, jobs.map(publicBooking), 'Assigned jobs retrieved', 200);
 });

@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { authenticate } from '../middleware/auth.middleware.js';
+import { authorizeRoles } from '../middleware/role.middleware.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { successResponse } from '../utils/apiResponse.js';
+import { submitReview, getBookingReview } from '../services/review.service.js';
+const router = Router();
+router.use(authenticate, authorizeRoles('user'));
+router.post('/', asyncHandler(async (req, res) => successResponse(res, await submitReview(req.body.bookingId, req.user._id || req.user.id, req.body), 'Review submitted', 201)));
+router.get('/booking/:id', asyncHandler(async (req, res) => successResponse(res, await getBookingReview(req.params.id, req.user._id || req.user.id))));
+export default router;

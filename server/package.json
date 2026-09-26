@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js && node tests/booking-flow.test.js && node tests/phase13-ai.test.js",
+    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js && node tests/booking-flow.test.js && node tests/phase13-ai.test.js && node tests/user-portal.test.js",
     "test:ai": "node tests/phase13-ai.test.js",
     "test:booking": "node tests/booking-flow.test.js",
     "test:auth": "node tests/auth.test.js",

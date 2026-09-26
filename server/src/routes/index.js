@@ -1,3 +1,4 @@
+import reviewRoutes from './review.routes.js';
 import { Router } from 'express';
 import authRoutes from './auth.routes.js';
 import userRoutes from './user.routes.js';
@@ -29,6 +30,7 @@ apiRouter.use('/cooperatives', cooperativeRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/services', serviceRoutes);
 apiRouter.use('/bookings', bookingRoutes);
+apiRouter.use('/reviews', reviewRoutes);
 apiRouter.use('/matching', matchingRoutes);
 apiRouter.use('/ai', aiRoutes);
 

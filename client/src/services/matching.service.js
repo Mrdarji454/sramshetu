@@ -20,6 +20,7 @@ export const matchingService = {
     const query = new URLSearchParams();
     if (params.latitude !== undefined) query.append('lat', params.latitude);
     if (params.longitude !== undefined) query.append('lng', params.longitude);
+    if (params.query) query.append('query', params.query);
     if (params.skill) query.append('skill', params.skill);
     if (params.trade) query.append('trade', params.trade);
     if (params.availableOnly !== undefined) query.append('available', params.availableOnly);

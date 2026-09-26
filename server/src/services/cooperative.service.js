@@ -59,11 +59,18 @@ inMemoryCooperatives.set(defaultCoopId, {
       name: 'Rajeshwar Shinde',
       phone: '+91 98201 44019',
       trade: 'Electrical & Power Systems',
+      primaryTrade: 'Electrical & Power Systems',
+      subTrades: ['Industrial Wiring', 'Solar Inverter Setup', 'Distribution Boards'],
+      skills: ['Distribution Boards', 'Short Circuit Diagnostics', 'Solar Inverters', 'Appliance Load Balancing'],
+      experienceYears: 8,
       dailyFloorRate: 1300,
+      hourlyRate: 450,
       status: 'available',
       rating: 4.94,
       jobsCompleted: 462,
       isVerified: true,
+      aadhaarVerified: true,
+      nsdcCertified: true,
     },
     {
       id: 'W-MH-3312',
@@ -71,11 +78,18 @@ inMemoryCooperatives.set(defaultCoopId, {
       name: 'Santosh Waghmare',
       phone: '+91 98201 11223',
       trade: 'Plumbing & Water Sanitation',
+      primaryTrade: 'Plumbing & Water Sanitation',
+      subTrades: ['Pipeline Installation', 'Hydro-Jetting', 'Sanitary Fitting'],
+      skills: ['Leakage Detection', 'PPR/CPVC Fitting', 'Motor Pump Overhaul', 'Drainage Sanitation'],
+      experienceYears: 6,
       dailyFloorRate: 1150,
+      hourlyRate: 400,
       status: 'available',
       rating: 4.88,
       jobsCompleted: 310,
       isVerified: true,
+      aadhaarVerified: true,
+      nsdcCertified: true,
     },
     {
       id: 'W-MH-2245',
@@ -83,23 +97,56 @@ inMemoryCooperatives.set(defaultCoopId, {
       name: 'Dattatray Pawar',
       phone: '+91 98201 55667',
       trade: 'Carpentry & Woodwork',
+      primaryTrade: 'Carpentry & Woodwork',
+      subTrades: ['Modular Furniture', 'Door & Lock Fitting', 'Wood Polishing'],
+      skills: ['Modular Kitchens', 'Custom Woodwork', 'Precision Lathe & Joinery', 'Hardware Fitting'],
+      experienceYears: 7,
       dailyFloorRate: 1200,
+      hourlyRate: 420,
       status: 'available',
       rating: 4.91,
       jobsCompleted: 198,
       isVerified: true,
+      aadhaarVerified: true,
+      nsdcCertified: true,
     },
     {
       id: 'W-MH-7789',
       _id: 'W-MH-7789',
       name: 'Kavita Sonawane',
       phone: '+91 98201 77889',
-      trade: 'Professional Painting',
+      trade: 'Professional Painting & Surface Coating',
+      primaryTrade: 'Professional Painting & Surface Coating',
+      subTrades: ['Interior Emulsion', 'Waterproofing', 'Texture Stencil'],
+      skills: ['Airless Spray Painting', 'Wall Putty Leveling', 'Epoxy Flooring', 'Damp-Proof Coating'],
+      experienceYears: 5,
       dailyFloorRate: 1100,
+      hourlyRate: 380,
       status: 'available',
       rating: 4.96,
       jobsCompleted: 142,
       isVerified: true,
+      aadhaarVerified: true,
+      nsdcCertified: true,
+    },
+    {
+      id: 'W-MH-9901',
+      _id: 'W-MH-9901',
+      name: 'Sachin Jadhav',
+      phone: '+91 98201 22334',
+      trade: 'HVAC & Refrigeration Services',
+      primaryTrade: 'HVAC & Refrigeration Services',
+      subTrades: ['Inverter AC Servicing', 'Gas Charging', 'Chiller Maintenance'],
+      skills: ['Compressor Repair', 'Vacuum Pump Evacuation', 'Ductless Mini-Split Fitting', 'Refrigerant Recovery'],
+      experienceYears: 9,
+      dailyFloorRate: 1350,
+      hourlyRate: 500,
+      status: 'available',
+      rating: 4.93,
+      jobsCompleted: 284,
+      isVerified: true,
+      aadhaarVerified: true,
+      nsdcCertified: true,
     },
   ],
   verificationStatus: 'verified',
@@ -160,11 +207,37 @@ inMemoryCooperatives.set(secondCoopId, {
       name: 'Ganesh Shingate',
       phone: '+91 98201 88990',
       trade: 'Civil Construction & Masonry',
+      primaryTrade: 'Civil Construction & Masonry',
+      subTrades: ['Brickwork', 'Plastering', 'Tile Laying', 'Structural Concrete'],
+      skills: ['Leveling & Plumb', 'Waterproofing Compound Mixing', 'Granite & Vitrified Tiling', 'Scaffolding Safety'],
+      experienceYears: 9,
       dailyFloorRate: 1400,
+      hourlyRate: 550,
       status: 'available',
       rating: 4.92,
       jobsCompleted: 520,
       isVerified: true,
+      aadhaarVerified: true,
+      nsdcCertified: true,
+    },
+    {
+      id: 'W-MH-6671',
+      _id: 'W-MH-6671',
+      name: 'Vijay Gaikwad',
+      phone: '+91 98202 33445',
+      trade: 'Structural Fabrication & Welding',
+      primaryTrade: 'Structural Fabrication & Welding',
+      subTrades: ['TIG/MIG Welding', 'Safety Grill Fabrication', 'Shed Framework'],
+      skills: ['Arc Welding 6G', 'Plasma Torch Cutting', 'Load-Bearing Truss Fitting', 'Rust Prevention Primer'],
+      experienceYears: 11,
+      dailyFloorRate: 1450,
+      hourlyRate: 520,
+      status: 'available',
+      rating: 4.95,
+      jobsCompleted: 390,
+      isVerified: true,
+      aadhaarVerified: true,
+      nsdcCertified: true,
     },
   ],
   verificationStatus: 'verified',
@@ -385,7 +458,44 @@ export class CooperativeService {
    * Get members of cooperative
    */
   static async getMembers(cooperativeId) {
-    const coop = await this.getProfile(cooperativeId);
+    const cleanId = String(cooperativeId);
+    if (mongoose.connection.readyState === 1) {
+      let coop = await Cooperative.findOne({
+        $or: [{ _id: cleanId }, { 'governance.contactEmail': cleanId }],
+      });
+      const coopId = coop?._id || cleanId;
+
+      // Query workers enrolled in this cooperative
+      const workers = await Worker.find({ cooperative: coopId }).populate('user', 'name phone email profileImage');
+      if (workers && workers.length > 0) {
+        return workers.map((w) => ({
+          id: String(w._id),
+          _id: String(w._id),
+          userId: w.user?._id || w.user,
+          name: w.user?.name || w.name || 'Artisan',
+          phone: w.user?.phone || w.phone || '+91 98000 00000',
+          trade: w.experience?.primaryTrade || w.primaryTrade || 'General Artisan',
+          primaryTrade: w.experience?.primaryTrade || w.primaryTrade || 'General Artisan',
+          subTrades: w.experience?.subTrades || [],
+          skills: (w.skills || []).map((s) => s.name || s),
+          experienceYears: w.experience?.years || 0,
+          dailyFloorRate: w.rates?.dailyFloorRate || 1200,
+          hourlyRate: w.rates?.hourlyRate || 400,
+          status: w.availability?.status || 'available',
+          rating: w.rating?.average || 4.9,
+          jobsCompleted: w.rating?.totalJobs || 0,
+          isVerified: w.verificationStatus?.aadhaarVerified || false,
+          aadhaarVerified: w.verificationStatus?.aadhaarVerified || false,
+          nsdcCertified: w.verificationStatus?.nsdcCertified || false,
+        }));
+      }
+
+      if (coop && coop.members && coop.members.length > 0) {
+        return coop.members;
+      }
+    }
+
+    const coop = await this.getProfile(cleanId);
     return coop.members || [];
   }
 
@@ -460,7 +570,7 @@ export class CooperativeService {
   /**
    * Assign worker to booking
    */
-  static async assignWorker(bookingId, workerId, cooperativeUserId = null) {
-    return BookingService.assignWorker(bookingId, workerId, cooperativeUserId || defaultCoopId, 'COOPERATIVE');
+  static async assignWorker(bookingId, workerId, cooperativeUserId = null, role = 'COOPERATIVE') {
+    return BookingService.assignWorker(bookingId, workerId, cooperativeUserId || defaultCoopId, role);
   }
 }
