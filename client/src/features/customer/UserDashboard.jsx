@@ -150,7 +150,6 @@ export function UserDashboard() {
     );
     loadBookings();
     handleTabSwitch("bookings");
-    setBookingModalOpen(false);
     setTimeout(() => setFeedbackMsg(null), 5000);
   };
 
@@ -322,7 +321,7 @@ export function UserDashboard() {
             ₹{escrowRecorded.toLocaleString()}
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Booking payment state only; no provider confirmation is available.
+            Verified payments held until End OTP verification.
           </p>
         </Card>
 
@@ -558,13 +557,13 @@ export function UserDashboard() {
                   ).toLowerCase();
                   const paymentLabel =
                     {
-                      pending: "Payment pending (recorded)",
-                      held: "Escrow state recorded",
-                      escrow_locked: "Escrow state recorded",
-                      released: "Settlement state recorded",
-                      refunded: "Refund state recorded",
-                      failed: "Payment failure recorded",
-                      disputed: "Payment dispute recorded",
+                      pending: "Payment Pending",
+                      held: "Escrow Locked",
+                      escrow_locked: "Escrow Locked",
+                      released: "Payment Released",
+                      refunded: "Refunded",
+                      failed: "Payment Failed",
+                      disputed: "Payment Disputed",
                     }[recordedPaymentStatus] || "No payment status recorded";
                   const bookingAmount = b.price?.totalAmount ?? b.escrowAmount;
 
@@ -752,6 +751,7 @@ export function UserDashboard() {
                             booking={b}
                             onCancel={handleCancelBooking}
                             onViewQr={() => setSelectedBookingForQr(b)}
+                            onPaymentUpdated={loadBookings}
                           />
                         </div>
                       )}
@@ -773,6 +773,7 @@ export function UserDashboard() {
           setInitialBookingService(null);
         }}
         onBookingCreated={handleBookingCreated}
+        onPaymentUpdated={loadBookings}
       />
     </DashboardLayout>
   );

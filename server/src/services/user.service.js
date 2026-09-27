@@ -198,9 +198,7 @@ export class UserService {
     const transactions = bookings.map(booking => {
       const paymentStatus = paymentStatusOf(booking);
       const providerPayment = booking.paymentProvider || {};
-      const providerConfirmed = Boolean(
-        providerPayment.confirmedAt && providerPayment.transactionId && providerPayment.status,
-      );
+      const providerConfirmed = Boolean(providerPayment.confirmedAt && providerPayment.transactionId);
       const method = providerPayment.method || {};
       const last4 = String(method.last4 || '');
       const maskedPaymentMethod = providerConfirmed && /^\d{4}$/.test(last4)
@@ -210,17 +208,22 @@ export class UserService {
         }
         : null;
       const providerRefunded = providerConfirmed &&
-        ['refunded', 'refund_succeeded'].includes(String(providerPayment.refundStatus || providerPayment.status).toLowerCase());
+        ['refunded', 'refund_succeeded', 'processed'].includes(String(providerPayment.refundStatus || providerPayment.status).toLowerCase());
       const amount = recordAmount(booking);
       return {
         bookingId: String(booking._id || booking.id),
         bookingReference: String(booking.id || booking._id).slice(-8),
+        bookingStatus: String(booking.status || 'PENDING').toUpperCase(),
         service: booking.serviceName || booking.trade || 'Service booking',
         bookingDate: booking.createdAt || null,
         updatedAt: booking.updatedAt || null,
         amount,
         currency: booking.price?.currency || 'INR',
         paymentStatus,
+        paymentId: booking.paymentRecord ? String(booking.paymentRecord) : null,
+        razorpayOrderId: providerPayment.orderId || null,
+        razorpayPaymentId: providerPayment.transactionId || null,
+        refundStatus: booking.refundStatus || providerPayment.refundStatus || 'not_applicable',
         paymentMethod: maskedPaymentMethod
           ? `${maskedPaymentMethod.providerName} ···· ${maskedPaymentMethod.last4}`
           : null,
@@ -245,11 +248,11 @@ export class UserService {
     ).values()];
 
     return {
-      providerIntegrationAvailable: false,
+      providerIntegrationAvailable: Boolean(process.env.RAZORPAY_KEY_ID),
       paymentMethods,
       summary: {
-        paidAmount: sum(transactions.filter(item => item.providerConfirmed && ['paid', 'captured', 'succeeded'].includes(item.providerState))),
-        pendingAmount: sum(transactions.filter(item => item.paymentStatus === 'pending')),
+        paidAmount: sum(transactions.filter(item => item.providerConfirmed && ['paid', 'captured', 'succeeded', 'released'].includes(item.providerState))),
+        pendingAmount: sum(transactions.filter(item => item.paymentStatus === 'pending' && item.bookingStatus !== 'CANCELLED')),
         refundAmount: sum(transactions.filter(item => item.refundState === 'confirmed')),
         escrow: transactions.reduce((result, item) => {
           if (item.escrowState) result[item.escrowState] = (result[item.escrowState] || 0) + item.amount;

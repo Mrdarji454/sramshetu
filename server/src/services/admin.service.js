@@ -164,7 +164,7 @@ export class AdminService {
         const lng = coords[0] || 73.8567;
         const lat = coords[1] || 18.5204;
         const rawStatus = (w.availability?.status || 'available').toLowerCase();
-        
+
         // Compute state: Available | On Job | Busy | Offline
         let state = 'available';
         if (rawStatus === 'busy' || rawStatus === 'on_job') state = 'on_job';
@@ -221,8 +221,17 @@ export class AdminService {
           scheduledTime: b.scheduledTime?.start || b.createdAt || new Date().toISOString(),
           eta: status === 'in_progress' ? 'In Progress' : status === 'on_the_way' ? '8 mins' : status === 'accepted' ? '15 mins' : 'Awaiting dispatch',
           distanceKm: 3.4,
-          amount: b.price?.totalAmount || 850,
-          paymentStatus: b.paymentStatus || 'escrow_locked',
+          amount: b.price?.totalAmount ?? 0,
+          paymentStatus: b.paymentStatus || 'pending',
+          paymentRecord: b.paymentRecord ? String(b.paymentRecord) : null,
+          refundStatus: b.refundStatus || 'not_applicable',
+          paymentProvider: {
+            orderId: b.paymentProvider?.orderId || null,
+            transactionId: b.paymentProvider?.transactionId || null,
+            confirmedAt: b.paymentProvider?.confirmedAt || null,
+            refundStatus: b.paymentProvider?.refundStatus || b.refundStatus || 'not_applicable',
+            invoiceUrl: b.paymentProvider?.invoiceUrl || null,
+          },
           createdAt: b.createdAt || new Date().toISOString(),
           matchingFactors: {
             skillMatch: 96,

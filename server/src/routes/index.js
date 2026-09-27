@@ -11,6 +11,7 @@ import bookingRoutes from './booking.routes.js';
 import matchingRoutes from './matching.routes.js';
 import aiRoutes from './ai.routes.js';
 import pincodeRoutes from './pincode.routes.js';
+import paymentRoutes from './payment.routes.js';
 
 const apiRouter = Router();
 
@@ -33,6 +34,7 @@ apiRouter.use('/cooperatives', cooperativeRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/services', serviceRoutes);
 apiRouter.use('/bookings', bookingRoutes);
+apiRouter.use('/payments', paymentRoutes);
 apiRouter.use('/reviews', reviewRoutes);
 apiRouter.use('/matching', matchingRoutes);
 apiRouter.use('/ai', aiRoutes);

@@ -47,6 +47,34 @@ export const bookingService = {
     return response.data || response;
   },
 
+  async createPaymentOrder(bookingId) {
+    const response = await apiClient.post(`/payments/${bookingId}/create-order`, {}, { timeout: 45000 });
+    return response.data || response;
+  },
+
+  async verifyPayment(bookingId, payload) {
+    const response = await apiClient.post(`/payments/${bookingId}/verify-payment`, payload, { timeout: 45000 });
+    return response.data || response;
+  },
+
+  async getPaymentStatus(bookingId) {
+    const response = await apiClient.get(`/payments/${bookingId}/payment-status`, { timeout: 45000 });
+    return response.data || response;
+  },
+
+  async downloadInvoice(bookingId) {
+    const response = await apiClient.get(`/payments/${bookingId}/invoice`, { responseType: 'blob' });
+    const blob = response.data || response;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ShramSetu-${String(bookingId).slice(-8)}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+
   /**
    * Cooperative assigns an available worker to a booking
    */

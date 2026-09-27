@@ -7,6 +7,8 @@ import { Worker } from '../models/Worker.model.js';
 import { Cooperative } from '../models/Cooperative.model.js';
 import { CatalogService } from './service.service.js';
 import { AppError } from '../utils/AppError.js';
+import { refundPaymentForBooking } from './payment.service.js';
+import { config } from '../config/env.js';
 
 // State machine valid transition graph
 export const VALID_TRANSITIONS = {
@@ -256,7 +258,8 @@ export class BookingService {
       latitude: latitude ?? fallback[1], longitude: longitude ?? fallback[0],
       trade: requestedTrade, city, availableOnly: true, maxRadiusKm: 30, sortBy: 'score',
     });
-    const workers = matches.workers.map(item => ({ ...item.worker, rating: item.rating,
+    const workers = matches.workers.map(item => ({
+      ...item.worker, rating: item.rating,
       cooperativeId: item.cooperative?.id || null, cooperativeName: item.cooperative?.name,
       distanceKm: item.distance, availabilityStatus: item.availability.status,
     }));
@@ -289,7 +292,6 @@ export class BookingService {
       cooperativeId,
       workerId,
       specialInstructions = '',
-      price,
     } = bookingData;
 
     if (!location?.serviceAddress?.city || !location?.serviceAddress?.street) {
@@ -302,17 +304,23 @@ export class BookingService {
     // Resolve service catalog item if serviceId passed
     let resolvedServiceName = serviceName;
     let resolvedTrade = trade;
-    let floorRate = price?.floorRateAmount || 450;
-    let totalAmount = price?.totalAmount || floorRate * 2;
-
-    if (serviceId) {
-      const srv = await CatalogService.getServiceById(serviceId);
-      if (srv) {
-        resolvedServiceName = resolvedServiceName || srv.name;
-        resolvedTrade = resolvedTrade || srv.category || srv.name;
-        floorRate = srv.estimatedPrice?.floorRate || floorRate;
-        totalAmount = srv.estimatedPrice?.floorRate ? srv.estimatedPrice.floorRate * 2 : totalAmount;
-      }
+    let catalogService = serviceId ? await CatalogService.getServiceById(serviceId) : null;
+    if (serviceId && !catalogService) throw new AppError('Selected service was not found', 404);
+    if (!catalogService) {
+      const labels = [serviceName, trade].filter(Boolean).map(value => String(value).trim().toLowerCase());
+      catalogService = (await CatalogService.getServices()).find(service =>
+        [service.name, service.category].some(label => labels.includes(String(label).trim().toLowerCase())));
+    }
+    // Charge the existing two-hour estimate from server-owned rates. Client price
+    // values are display hints and must never determine a Razorpay order amount.
+    const floorRate = Number(catalogService?.estimatedPrice?.floorRate ?? 450);
+    const totalAmount = Math.round(floorRate * 2 * 100) / 100;
+    if (!Number.isFinite(floorRate) || floorRate <= 0 || !Number.isSafeInteger(Math.round(totalAmount * 100))) {
+      throw new AppError('Service pricing is unavailable', 409);
+    }
+    if (catalogService) {
+      resolvedServiceName = resolvedServiceName || catalogService.name;
+      resolvedTrade = resolvedTrade || catalogService.category || catalogService.name;
     }
 
     if (!resolvedServiceName) {
@@ -395,7 +403,7 @@ export class BookingService {
       cooperativeId: assignedCoopId,
       worker: isDirectWorkerBooking ? workerId : null,
       workerId: isDirectWorkerBooking ? workerId : null,
-      service: serviceId || null,
+      service: catalogService?._id || null,
       serviceName: resolvedServiceName,
       trade: resolvedTrade,
       description: (description || '').trim(),
@@ -426,7 +434,8 @@ export class BookingService {
         commissionCut: 0,
         currency: 'INR',
       },
-      paymentStatus: 'pending', // Accurate actual state: payment pending authorization
+      paymentStatus: config.paymentsEnabled ? 'pending' : 'not_required',
+      refundStatus: 'not_applicable',
       qrVerification: {
         token: qrToken,
         otpCode,
@@ -490,6 +499,9 @@ export class BookingService {
   static async getBookings({ userId, role, status, cooperativeId, search } = {}) {
     const normRole = normalizeRole(role);
     const cleanUserId = String(userId);
+    if (!userId || !['USER', 'WORKER', 'COOPERATIVE', 'ADMIN'].includes(normRole)) {
+      throw new AppError('An authorized account is required to view bookings', 403);
+    }
 
     if (mongoose.connection.readyState === 1) {
       const filter = {};
@@ -561,8 +573,7 @@ export class BookingService {
         const coopId = cooperativeId || cleanUserId;
         if (
           String(b.cooperative) !== String(coopId) &&
-          String(b.cooperativeId) !== String(coopId) &&
-          coopId !== defaultCoopId
+          String(b.cooperativeId) !== String(coopId)
         ) {
           continue;
         }
@@ -608,7 +619,7 @@ export class BookingService {
       }
     }
 
-    if (!booking) {
+    if (!booking && mongoose.connection.readyState !== 1) {
       booking = inMemoryBookings.get(cleanId);
       if (!booking) {
         for (const [, b] of inMemoryBookings) {
@@ -789,21 +800,14 @@ export class BookingService {
       updateFields.rejectionReason = rejectionReason || 'Worker unavailable for requested slot';
     } else if (targetStatus === 'ASSIGNED') {
       updateFields.rejectionReason = null;
-    } else if (targetStatus === 'COMPLETED') {
-      updateFields.paymentStatus = 'released';
-      if (!booking.qrVerification) {
-        booking.qrVerification = {};
-      }
-      booking.qrVerification.isVerified = true;
-      booking.qrVerification.verifiedAt = new Date();
-      updateFields['qrVerification.isVerified'] = true;
-      updateFields['qrVerification.verifiedAt'] = booking.qrVerification.verifiedAt;
     } else if (targetStatus === 'CANCELLED') {
       updateFields.cancellation = {
         cancelledBy: userId,
         reason: note || 'Cancelled by user',
         cancelledAt: new Date(),
       };
+      updateFields.refundStatus = ['held', 'escrow_locked'].includes(booking.paymentStatus)
+        ? 'pending' : booking.refundStatus || 'not_applicable';
     }
 
     if (mongoose.connection.readyState === 1) {
@@ -817,6 +821,10 @@ export class BookingService {
       );
       if (!updated) throw new AppError('Booking changed; refresh before retrying', 409);
       await bookingNotification(updated, targetStatus);
+      if (targetStatus === 'CANCELLED') {
+        await refundPaymentForBooking(updated);
+        return Booking.findById(updated._id);
+      }
       return updated;
     }
 

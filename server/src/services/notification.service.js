@@ -67,7 +67,8 @@ const titles = {
   DISPUTED: 'Booking disputed',
   START_OTP_VERIFIED: 'Start-work OTP verified', END_OTP_VERIFIED: 'End-work OTP verified',
   RATING_REMINDER: 'How was your service?', PAYMENT_RELEASED: 'Payment released',
-  PAYMENT_CONFIRMED: 'Payment confirmed', SETTLEMENT_COMPLETED: 'Payment settlement completed',
+  PAYMENT_CONFIRMED: 'Payment successful', SETTLEMENT_COMPLETED: 'Payment settlement completed',
+  PAYMENT_FAILED: 'Payment failed', REFUND_ALERT: 'Refund needs attention',
 };
 export async function bookingNotification(booking, type, eventKey) {
   return safelyNotify(async () => {
@@ -75,7 +76,8 @@ export async function bookingNotification(booking, type, eventKey) {
     const customer = () => notify({ ...payload, recipientId: ref(booking.customer || booking.customerId), recipientRole: 'USER' });
     const worker = () => notifyWorker(booking.worker || booking.workerId, type === 'ASSIGNED' ? { ...payload, title: 'New job assignment', message: `You have been assigned ${booking.serviceName || 'a service booking'}. Review the booking to accept or reject it.` } : payload);
     const cooperative = () => notifyCooperative(booking.cooperative || booking.cooperativeId, payload);
-    if (['START_OTP_VERIFIED', 'END_OTP_VERIFIED', 'PAYMENT_RELEASED'].includes(type)) await worker();
+    if (['START_OTP_VERIFIED', 'END_OTP_VERIFIED'].includes(type)) await worker();
+    else if (type === 'PAYMENT_RELEASED') { await customer(); await worker(); await bookingNotification(booking, 'SETTLEMENT_COMPLETED', eventKey && `settlement:${eventKey}`); }
     else if (type === 'SETTLEMENT_COMPLETED') await cooperative();
     else if (type === 'NEW_BOOKING') { await worker(); await cooperative(); }
     else if (type !== 'DISPUTED') {
@@ -85,5 +87,6 @@ export async function bookingNotification(booking, type, eventKey) {
     }
     if (type === 'COMPLETED') await bookingNotification(booking, 'RATING_REMINDER', `rating:${ref(booking)}`);
     if (type === 'DISPUTED') await notifyAdmins({ ...payload, type: 'COMPLAINT_SUBMITTED', title: 'Booking complaint submitted', message: 'A disputed booking needs administrator review.' });
+    if (['PAYMENT_FAILED', 'REFUND_ALERT'].includes(type)) await notifyAdmins(payload);
   });
 }

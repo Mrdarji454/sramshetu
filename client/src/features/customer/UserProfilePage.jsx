@@ -26,6 +26,7 @@ import { Button } from "../../components/ui/Button";
 import { DashboardLayout } from "../../layouts/DashboardLayout";
 import { useAuth } from "../../context/AuthContext";
 import { bookingService } from "../../services/booking.service";
+import { paymentStatusLabel } from "../../utils/paymentStatus";
 import { otpService } from "../../services/otp.service";
 import { profileService } from "../../services/profile.service";
 import { pincodeService } from "../../services/pincode.service";
@@ -1391,17 +1392,23 @@ export function UserProfilePage() {
                                   {money(item.amount, item.currency)}
                                 </span>
                                 <Badge variant="outline" size="sm">
-                                  {statusLabel(item.paymentStatus)}
+                                  {paymentStatusLabel(item.paymentStatus)}
                                 </Badge>
                                 {item.invoiceUrl && (
                                   <a
-                                    href={item.invoiceUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                    href="#invoice"
+                                    onClick={async (event) => {
+                                      event.preventDefault();
+                                      try {
+                                        await bookingService.downloadInvoice(item.bookingId);
+                                      } catch (error) {
+                                        setError(error.message || "Invoice could not be downloaded.");
+                                      }
+                                    }}
                                     className="inline-flex items-center gap-1 text-xs font-semibold text-brand-navy-900 underline"
                                   >
                                     <FileText className="h-3.5 w-3.5" />
-                                    Receipt
+                                    Invoice PDF
                                   </a>
                                 )}
                               </div>
@@ -1413,7 +1420,7 @@ export function UserProfilePage() {
                                     Recorded payment state
                                   </dt>
                                   <dd className="mt-0.5 font-semibold text-slate-800">
-                                    {statusLabel(item.paymentStatus)}
+                                    {paymentStatusLabel(item.paymentStatus)}
                                   </dd>
                                 </div>
                                 <div>
@@ -1423,7 +1430,7 @@ export function UserProfilePage() {
                                   <dd className="mt-0.5 font-semibold text-slate-800">
                                     {item.providerConfirmed
                                       ? statusLabel(item.providerState)
-                                      : "Unavailable; provider not integrated"}
+                                      : "Awaiting payment confirmation"}
                                   </dd>
                                 </div>
                                 <div>
@@ -1449,9 +1456,7 @@ export function UserProfilePage() {
                                     Refund state
                                   </dt>
                                   <dd className="mt-0.5 font-semibold text-slate-800">
-                                    {item.providerConfirmed
-                                      ? item.refundState || "No refund recorded"
-                                      : "Not provider-confirmed"}
+                                    {String(item.refundStatus || item.refundState || "not_applicable").replaceAll("_", " ")}
                                   </dd>
                                 </div>
                                 <div>
@@ -1462,6 +1467,10 @@ export function UserProfilePage() {
                                     {dateTime(item.refundConfirmedAt)}
                                   </dd>
                                 </div>
+                                {item.razorpayPaymentId && <div>
+                                  <dt className="text-slate-500">Razorpay Payment ID</dt>
+                                  <dd className="mt-0.5 font-mono text-slate-800">{item.razorpayPaymentId}</dd>
+                                </div>}
                                 <div>
                                   <dt className="text-slate-500">
                                     Payment method

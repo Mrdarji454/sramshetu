@@ -21,7 +21,7 @@ async function runBookingFlowTests() {
   // Test 1: Service Catalog Lookup & Filter
   const allServices = await CatalogService.getServices();
   assert(Array.isArray(allServices) && allServices.length >= 6, 'CatalogService returns pre-seeded trade services');
-  
+
   const electricalServices = await CatalogService.getServices({ category: 'Electrical' });
   assert(electricalServices.length > 0 && electricalServices[0].category === 'Electrical', 'CatalogService filters services by category');
 
@@ -53,8 +53,8 @@ async function runBookingFlowTests() {
       start: new Date(Date.now() + 86400000),
     },
     price: {
-      floorRateAmount: 450,
-      totalAmount: 900,
+      floorRateAmount: 0.01,
+      totalAmount: 0.01,
     },
     specialInstructions: 'Switchboard sparking in master bedroom',
   });
@@ -63,6 +63,8 @@ async function runBookingFlowTests() {
   assert(newBooking.qrVerification?.token?.startsWith('QR-SS-'), 'Generates secure QR token');
   assert(newBooking.qrVerification?.otpCode == null, 'Does not expose a reusable booking OTP');
   assert(newBooking.price.commissionCut === 0, 'Guarantees 0% middleman commission');
+  assert(newBooking.price.totalAmount === 900, 'Uses server service rates instead of a client-supplied payment amount');
+  assert(newBooking.paymentStatus === 'not_required', 'Payments are disabled for local development');
   assert(newBooking.statusHistory.length === 1, 'Records initial status in statusHistory');
 
   // Test 4: Cooperative Assigns Suitable Worker
@@ -94,13 +96,32 @@ async function runBookingFlowTests() {
   assert(onTheWay.status === 'ON_THE_WAY', 'Status transitions from ACCEPTED to ON_THE_WAY');
 
   const start = await issueWorkOtp(newBooking.id, 'start', mockCustomerUserId, 'USER');
+  assert(/^\d{6}$/.test(start.code), 'Development mode issues Start OTP without payment');
+  newBooking.paymentStatus = 'escrow_locked';
+  const previousEnvironment = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  let offlineProductionError;
+  try { await issueWorkOtp(newBooking.id, 'start', mockCustomerUserId, 'USER'); }
+  catch (err) { offlineProductionError = err; }
+  finally {
+    if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousEnvironment;
+  }
+  assert(offlineProductionError?.statusCode === 503, 'Production work verification fails closed when the payment database is unavailable');
+  newBooking.paymentStatus = 'not_required';
+  newBooking.refundStatus = 'pending';
+  let refundedStartError = null;
+  try {
+    await verifyWorkOtp(newBooking.id, 'start', start.code, mockWorkerId, 'WORKER');
+  } catch (err) { refundedStartError = err; }
+  assert(refundedStartError?.statusCode === 409 && !newBooking.startOTP.usedAt, 'Refund initiation invalidates a previously issued start OTP');
+  newBooking.refundStatus = 'not_applicable';
   const inProgress = await verifyWorkOtp(newBooking.id, 'start', start.code, mockWorkerId, 'WORKER');
   assert(inProgress.status === 'IN_PROGRESS', 'Start OTP transitions to IN_PROGRESS');
-  newBooking.paymentStatus = 'escrow_locked';
   const end = await issueWorkOtp(newBooking.id, 'end', mockCustomerUserId, 'USER');
   const completed = await verifyWorkOtp(newBooking.id, 'end', end.code, mockWorkerId, 'WORKER');
   assert(completed.status === 'COMPLETED', 'Status transitions from IN_PROGRESS to COMPLETED');
-  assert(completed.paymentStatus === 'released', 'Escrow payment marked released on completion');
+  assert(completed.paymentStatus === 'not_required', 'Direct OTP completion does not fabricate payment release');
   assert(completed.qrVerification?.isVerified === true, 'QR verification marked verified on completion');
 
   // Test 7: State Machine Blocks Invalid Transitions
@@ -189,6 +210,24 @@ async function runBookingFlowTests() {
     { note: 'Customer no longer requires service' }
   );
   assert(cancelled.status === 'CANCELLED', 'Customer can cancel PENDING booking');
+  assert(cancelled.refundStatus === 'not_applicable', 'Cancelling an unpaid booking does not claim a refund');
+
+  const paidCancellation = await BookingService.createBooking(mockCustomerUserId, {
+    serviceName: 'Plumbing', trade: 'Plumbing',
+    location: { serviceAddress: { street: 'Test Street', city: 'Pune' } },
+    scheduledTime: { start: new Date(Date.now() + 86400000) },
+  });
+  paidCancellation.paymentStatus = 'escrow_locked';
+  const cancelledPaid = await BookingService.updateBookingStatus(paidCancellation.id, 'CANCELLED', mockCustomerUserId, 'USER');
+  assert(cancelledPaid.refundStatus === 'pending' && cancelledPaid.paymentStatus !== 'refunded', 'Paid cancellation requests a refund without claiming provider confirmation');
+
+  const otherCoopBooking = await BookingService.createBooking(mockCustomerUserId, {
+    serviceName: 'Plumbing', trade: 'Plumbing', cooperativeId: '65f123456789012345678904',
+    location: { serviceAddress: { street: 'Private Street', city: 'Pune' } },
+    scheduledTime: { start: new Date(Date.now() + 86400000) },
+  });
+  const cooperativeHistory = await BookingService.getBookings({ userId: mockCoopId, cooperativeId: mockCoopId, role: 'COOPERATIVE' });
+  assert(!cooperativeHistory.some(item => String(item._id) === String(otherCoopBooking._id)), 'Cooperative payment history excludes another cooperative bookings');
 
   console.log('\n================================');
   console.log(`Summary: ${passed}/${total} booking workflow tests passed!`);

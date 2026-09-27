@@ -72,13 +72,12 @@ await test('One-time start code advances exactly once under concurrent requests'
 await test('Premature reviews are rejected', async () => {
   await assert.rejects(() => submitReview(id, customer, { rating: 5 }), { statusCode: 409 });
 });
-booking.paymentStatus = 'escrow_locked';
 const end = await issueWorkOtp(id, 'end', customer, 'USER');
-await test('Independent completion code settles held escrow and cannot be reused', async () => {
+await test('Independent completion code completes directly without fabricating payment release', async () => {
   assert.notEqual(booking.endOTP.salt, booking.startOTP.salt);
   const completed = await verifyWorkOtp(id, 'end', end.code, worker, 'WORKER');
   assert.equal(completed.status, 'COMPLETED');
-  assert.equal(completed.paymentStatus, 'released');
+  assert.equal(completed.paymentStatus, 'not_required');
   await assert.rejects(() => verifyWorkOtp(id, 'end', end.code, worker, 'WORKER'), { statusCode: 409 });
   const reloaded = await BookingService.getBookingById(id, customer, 'USER');
   assert.equal(reloaded.status, 'COMPLETED');

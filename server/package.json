@@ -6,9 +6,11 @@
   "type": "module",
   "scripts": {
     "test:notifications": "node tests/notifications.test.js",
+    "test:payments": "node tests/payments.test.js && node tests/invoices.test.js",
+    "test:payments:integration": "node tests/payments.integration.test.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js && node tests/registration-flow.test.js && node tests/booking-flow.test.js && node tests/phase13-ai.test.js && node tests/user-portal.test.js && node tests/profile-vault.test.js",
+    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js && node tests/registration-flow.test.js && node tests/booking-flow.test.js && node tests/payments.test.js && node tests/invoices.test.js && node tests/phase13-ai.test.js && node tests/user-portal.test.js && node tests/profile-vault.test.js",
     "test:ai": "node tests/phase13-ai.test.js",
     "test:booking": "node tests/booking-flow.test.js",
     "test:auth": "node tests/auth.test.js",

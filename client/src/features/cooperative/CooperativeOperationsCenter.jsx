@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import { bookingService } from "../../services/booking.service";
+import { paymentStatusLabel } from "../../utils/paymentStatus";
 import { routeService } from "../../services/route.service";
 
 const TERMINAL = new Set(["COMPLETED", "CANCELLED", "REJECTED"]);
@@ -1239,7 +1241,31 @@ export function CooperativeOperationsCenter({
                         </td>
                         <td>{statusOf(booking)}</td>
                         <td className="capitalize">
-                          {booking.paymentStatus || "Not recorded"}
+                          <div>{paymentStatusLabel(booking.paymentStatus)}</div>
+                          {booking.paymentProvider?.transactionId && (
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              {booking.paymentProvider.transactionId}
+                            </div>
+                          )}
+                          {booking.refundStatus &&
+                            booking.refundStatus !== "not_applicable" && (
+                              <div className="text-[10px] text-amber-700">
+                                Refund: {booking.refundStatus.replaceAll("_", " ")}
+                              </div>
+                            )}
+                          {booking.paymentProvider?.invoiceUrl && (
+                            <button
+                              type="button"
+                              className="text-[10px] text-brand-navy-900 underline"
+                              onClick={() =>
+                                bookingService.downloadInvoice(
+                                  booking.id || booking._id,
+                                ).catch(error => alert(error.message))
+                              }
+                            >
+                              Invoice
+                            </button>
+                          )}
                         </td>
                         <td className="text-right font-semibold">
                           {money(

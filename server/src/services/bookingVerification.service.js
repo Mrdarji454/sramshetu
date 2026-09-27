@@ -4,10 +4,27 @@ import { Booking } from '../models/Booking.model.js';
 import { BookingService, normalizeStatus, normalizeRole } from './booking.service.js';
 import { AppError } from '../utils/AppError.js';
 import { bookingNotification } from './notification.service.js';
+import { assertBookingPaymentLocked, releasePaymentForBooking } from './payment.service.js';
+import { config } from '../config/env.js';
 
 const stages = { start: ['ON_THE_WAY', 'IN_PROGRESS', 'startOTP'], end: ['IN_PROGRESS', 'COMPLETED', 'endOTP'] };
 const hash = (code, salt) => scryptSync(code, salt, 32).toString('hex');
 const validStageStatus = (status, required) => normalizeStatus(status) === required || (required === 'ON_THE_WAY' && normalizeStatus(status) === 'ARRIVED');
+
+async function requireLockedPayment(booking) {
+  if (!config.paymentsEnabled && config.env === 'development' && !booking.paymentRecord &&
+    !['pending', 'processed', 'failed'].includes(booking.refundStatus)) return null;
+  if (mongoose.connection.readyState === 1) return assertBookingPaymentLocked(booking);
+  if (!['held', 'escrow_locked'].includes(booking.paymentStatus) || ['pending', 'processed', 'failed'].includes(booking.refundStatus)) {
+    throw new AppError('A verified payment must be locked before work can start or complete', 409);
+  }
+  if (process.env.NODE_ENV !== 'production' && process.env.PAYMENT_DEMO_MODE === 'true') return;
+  throw new AppError('Payment verification is unavailable while the database is disconnected', 503);
+}
+
+const paymentFilter = booking => config.paymentsEnabled || booking.paymentRecord
+  ? { paymentRecord: booking.paymentRecord, paymentStatus: 'escrow_locked', refundStatus: 'not_applicable' }
+  : { paymentRecord: null, paymentStatus: booking.paymentStatus };
 
 export function publicBooking(value) {
   const data = value.toObject ? value.toObject({ virtuals: true }) : structuredClone(value);
@@ -24,6 +41,8 @@ export async function issueWorkOtp(id, stage, actor, role) {
   if (normalizeRole(role) !== 'USER') throw new AppError('Only the booking customer may request a code', 403);
   const [required, , field] = stages[stage];
   if (!validStageStatus(booking.status, required)) throw new AppError('Verification is not available at this stage', 409);
+  await requireLockedPayment(booking);
+  if (stage === 'end' && !booking.startOTP?.usedAt) throw new AppError('Start OTP verification is required before completion', 409);
   const previous = booking[field];
   if (previous?.issuedAt && Date.now() - new Date(previous.issuedAt).getTime() < 30000) throw new AppError('Wait 30 seconds before requesting another code', 429);
   let code;
@@ -31,7 +50,9 @@ export async function issueWorkOtp(id, stage, actor, role) {
   const salt = randomBytes(16).toString('hex');
   const otp = { salt, hash: hash(code, salt), issuedAt: new Date(), expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0, usedAt: null };
   if (mongoose.connection.readyState === 1) {
-    const saved = await Booking.findOneAndUpdate({ _id: booking._id, status: booking.status,
+    const saved = await Booking.findOneAndUpdate({
+      _id: booking._id, status: booking.status,
+      ...paymentFilter(booking),
       $or: [{ [`${field}.issuedAt`]: { $exists: false } }, { [`${field}.issuedAt`]: { $lte: new Date(Date.now() - 30000) } }],
     }, { $set: { [field]: otp } });
     if (!saved) throw new AppError('Booking changed or a code was just issued; refresh and retry', 409);
@@ -45,10 +66,12 @@ export async function verifyWorkOtp(id, stage, code, actor, role) {
   const booking = await BookingService.getBookingById(id, actor, role);
   if (normalizeRole(role) !== 'WORKER') throw new AppError('Only the assigned worker may verify a code', 403);
   const [required, next, field] = stages[stage];
+  await requireLockedPayment(booking);
+  if (stage === 'end' && !booking.startOTP?.usedAt) throw new AppError('Start OTP verification is required before completion', 409);
   const otp = booking[field];
   if (!validStageStatus(booking.status, required) || !otp?.hash || otp.usedAt || new Date(otp.expiresAt) <= new Date() || otp.attempts >= 5) throw new AppError('Code unavailable, expired, used, or locked. Ask the customer for a new code.', 409);
   const valid = timingSafeEqual(Buffer.from(otp.hash, 'hex'), Buffer.from(hash(String(code), otp.salt), 'hex'));
-  const filter = { _id: booking._id, status: booking.status, [`${field}.hash`]: otp.hash, [`${field}.usedAt`]: null, [`${field}.attempts`]: { $lt: 5 }, [`${field}.expiresAt`]: { $gt: new Date() } };
+  const filter = { _id: booking._id, status: booking.status, ...paymentFilter(booking), [`${field}.hash`]: otp.hash, [`${field}.usedAt`]: null, [`${field}.attempts`]: { $lt: 5 }, [`${field}.expiresAt`]: { $gt: new Date() } };
   if (!valid) {
     if (mongoose.connection.readyState === 1) await Booking.updateOne(filter, { $inc: { [`${field}.attempts`]: 1 } });
     else otp.attempts += 1;
@@ -57,23 +80,29 @@ export async function verifyWorkOtp(id, stage, code, actor, role) {
   const event = { status: next, updatedBy: actor, role: 'WORKER', timestamp: new Date(), note: `${stage === 'start' ? 'Arrival' : 'Completion'} verified by customer code` };
   const fields = { status: next, trackingStatus: next, [`${field}.usedAt`]: new Date() };
   if (stage === 'end') {
-    // Preserve the existing escrow state architecture. No gateway charge is fabricated.
-    fields.paymentStatus = ['held', 'escrow_locked'].includes(booking.paymentStatus) ? 'released' : booking.paymentStatus;
     fields['qrVerification.isVerified'] = true;
     fields['qrVerification.verifiedAt'] = new Date();
+    if (!config.paymentsEnabled && !booking.paymentRecord) fields.paymentStatus = 'not_required';
   }
   if (mongoose.connection.readyState === 1) {
     const saved = await Booking.findOneAndUpdate(filter, { $set: fields, $push: { statusHistory: event, timelineEvents: event } }, { new: true });
     if (!saved) throw new AppError('Code already consumed or booking changed', 409);
-    await bookingNotification(saved, next);
-    await bookingNotification(saved, stage === 'start' ? 'START_OTP_VERIFIED' : 'END_OTP_VERIFIED');
-    if (stage === 'end' && saved.paymentStatus === 'released' && booking.paymentStatus !== 'released') await bookingNotification(saved, 'PAYMENT_RELEASED');
-    return publicBooking(saved);
+    if (stage === 'end' && saved.paymentRecord) await releasePaymentForBooking(saved);
+    const completedBooking = stage === 'end' ? await Booking.findById(saved._id) : saved;
+    await bookingNotification(completedBooking, next);
+    await bookingNotification(completedBooking, stage === 'start' ? 'START_OTP_VERIFIED' : 'END_OTP_VERIFIED');
+    return publicBooking(completedBooking);
   }
   booking.status = next;
   booking.trackingStatus = next;
   otp.usedAt = new Date();
-  if (stage === 'end') { booking.paymentStatus = fields.paymentStatus; booking.qrVerification ||= {}; booking.qrVerification.isVerified = true; booking.qrVerification.verifiedAt = new Date(); }
+  if (stage === 'end') {
+    if (booking.paymentRecord) booking.paymentStatus = 'released';
+    else if (!config.paymentsEnabled) booking.paymentStatus = 'not_required';
+    booking.qrVerification ||= {};
+    booking.qrVerification.isVerified = true;
+    booking.qrVerification.verifiedAt = new Date();
+  }
   (booking.statusHistory ||= []).push(event);
   (booking.timelineEvents ||= []).push(event);
   return publicBooking(booking);

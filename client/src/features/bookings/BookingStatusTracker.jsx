@@ -1,6 +1,6 @@
-import { LiveTrackingMap } from './LiveTrackingMap';
-import { WorkVerificationPanel } from './WorkVerificationPanel';
-import { BookingReview } from './BookingReview';
+import { LiveTrackingMap } from "./LiveTrackingMap";
+import { WorkVerificationPanel } from "./WorkVerificationPanel";
+import { BookingReview } from "./BookingReview";
 import React from "react";
 import {
   Clock,
@@ -17,6 +17,11 @@ import {
 } from "lucide-react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import {
+  useBookingPayment,
+  paymentStatusLabel,
+  paymentsEnabled,
+} from "./useBookingPayment";
 
 // Milestone definitions for the booking lifecycle
 export const BOOKING_STEPS = [
@@ -46,14 +51,14 @@ export const BOOKING_STEPS = [
   },
   {
     key: "IN_PROGRESS",
-    label: "Work In Progress",
-    desc: "Artisan arrived & executing work",
+    label: "Work Started",
+    desc: "Start OTP verified",
     icon: Wrench,
   },
   {
     key: "COMPLETED",
-    label: "Completed & Settled",
-    desc: "Work done & escrow released",
+    label: "Work Completed",
+    desc: "End OTP verified",
     icon: ShieldCheck,
   },
 ];
@@ -88,9 +93,19 @@ export function BookingStatusTracker({
   booking,
   onCancel,
   onViewQr,
+  onPaymentUpdated,
   showWorkerContact = true,
   className = "",
 }) {
+  const {
+    paymentStatus,
+    isPaying,
+    paymentMessage,
+    handlePayment,
+    downloadInvoice,
+    retryingVerification,
+  } = useBookingPayment({ booking, onPaymentUpdated });
+
   if (!booking) return null;
 
   const currentStatus = (booking.status || "PENDING").toUpperCase();
@@ -101,7 +116,12 @@ export function BookingStatusTracker({
 
   // Can customer cancel?
   const canCancel = ["PENDING", "ASSIGNED", "ACCEPTED"].includes(currentStatus);
-
+  const normalizedPaymentStatus = String(
+    paymentStatus || "pending",
+  ).toLowerCase();
+  const paymentIsLocked = ["held", "escrow_locked"].includes(
+    normalizedPaymentStatus,
+  );
   return (
     <div
       className={`bg-white rounded-2xl border border-slate-200 p-6 shadow-sm ${className}`}
@@ -197,8 +217,10 @@ export function BookingStatusTracker({
           <div className="text-xs">
             <p className="font-bold">Booking Cancelled</p>
             <p className="text-red-700 mt-0.5">
-              Reason: {booking.cancellation?.reason || "Cancelled by user"}. Any
-              held escrow funds will be fully reversed without penalty.
+              Reason: {booking.cancellation?.reason || "Cancelled by user"}.
+              {booking.refundStatus &&
+                booking.refundStatus !== "not_applicable" &&
+                ` Refund: ${booking.refundStatus.replaceAll("_", " ")}.`}
             </p>
           </div>
         </div>
@@ -287,9 +309,48 @@ export function BookingStatusTracker({
         </div>
       )}
 
-      <p className="my-4 text-sm font-semibold">Payment: {{ pending: 'Pending', held: 'Escrow Locked', escrow_locked: 'Escrow Locked', released: 'Released' }[booking.paymentStatus] || booking.paymentStatus}</p>
-      {currentStatus === 'ON_THE_WAY' && <LiveTrackingMap booking={booking} />}
-      {['ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'].includes(currentStatus) && <WorkVerificationPanel booking={booking} />}
+      <div className="my-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-semibold">
+          Payment:{" "}
+          {paymentStatusLabel(
+            !paymentsEnabled &&
+              ["pending", "failed"].includes(normalizedPaymentStatus)
+              ? "not_required"
+              : normalizedPaymentStatus,
+          )}
+        </p>
+        {paymentsEnabled &&
+          ["pending", "failed"].includes(normalizedPaymentStatus) &&
+          !isCancelled && (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={isPaying}
+              onClick={handlePayment}
+            >
+              {isPaying
+                ? "Confirming payment…"
+                : retryingVerification
+                  ? "Retry verification"
+                  : `Pay ₹${booking.price?.totalAmount ?? booking.escrowAmount ?? 0}`}
+            </Button>
+          )}
+        {booking.paymentProvider?.invoiceUrl && (
+          <Button variant="outline" size="sm" onClick={downloadInvoice}>
+            Download invoice
+          </Button>
+        )}
+      </div>
+      {paymentMessage && (
+        <p role="status" className="mb-3 text-sm text-slate-700">
+          {paymentMessage}
+        </p>
+      )}
+      {currentStatus === "ON_THE_WAY" && <LiveTrackingMap booking={booking} />}
+      {["ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(currentStatus) &&
+        (currentStatus === "IN_PROGRESS" ||
+          !paymentsEnabled ||
+          paymentIsLocked) && <WorkVerificationPanel booking={booking} />}
       {isCompleted && <BookingReview booking={booking} />}
 
       {/* Worker & Location Details Card */}

@@ -1,7 +1,12 @@
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
 
 // Load environment variables from .env file
-dotenv.config();
+dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
+
+const runtimeEnvironment = () => process.env.NODE_ENV || 'development';
+const paymentsAreEnabled = () => process.env.PAYMENTS_ENABLED === 'true' ||
+  (runtimeEnvironment() !== 'development' && process.env.PAYMENTS_ENABLED !== 'false');
 
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET'];
 
@@ -12,7 +17,8 @@ for (const envVar of requiredEnvVars) {
 }
 
 export const config = {
-  env: process.env.NODE_ENV || 'development',
+  env: runtimeEnvironment(),
+  get paymentsEnabled() { return paymentsAreEnabled(); },
   port: parseInt(process.env.PORT, 10) || 5000,
   mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/shramsetu',
   jwt: {

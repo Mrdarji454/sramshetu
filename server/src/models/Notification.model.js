@@ -5,7 +5,7 @@ export const NOTIFICATION_TYPES = {
   ACCEPTED: 'Booking', REJECTED: 'Booking', ON_THE_WAY: 'Booking', ARRIVED: 'Booking',
   IN_PROGRESS: 'Booking', COMPLETED: 'Booking', CANCELLED: 'Booking', RESCHEDULED: 'Booking', DISPUTED: 'Booking',
   OTP_GENERATED: 'Booking', START_OTP_VERIFIED: 'Booking', END_OTP_VERIFIED: 'Booking', RATING_REMINDER: 'Booking',
-  PAYMENT_CONFIRMED: 'Payment', PAYMENT_RELEASED: 'Payment', SETTLEMENT_COMPLETED: 'Payment',
+  PAYMENT_CONFIRMED: 'Payment', PAYMENT_RELEASED: 'Payment', PAYMENT_FAILED: 'Payment', REFUND_ALERT: 'Payment', SETTLEMENT_COMPLETED: 'Payment',
   VERIFICATION_APPROVED: 'Verification', VERIFICATION_REJECTED: 'Verification', DOCUMENT_EXPIRY: 'Verification',
   VERIFICATION_PENDING: 'Verification', WORKER_REGISTERED: 'Verification', COOPERATIVE_REGISTERED: 'Verification',
   WORKER_JOINED: 'Booking', WORKER_UNAVAILABLE: 'Booking',

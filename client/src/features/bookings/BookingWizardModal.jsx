@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { catalogService } from "../../services/service.service";
 import { bookingService } from "../../services/booking.service";
+import { useBookingPayment, paymentStatusLabel } from "./useBookingPayment";
 import { useAuth } from "../../context/AuthContext";
 import {
   POPULAR_PROFESSIONS,
@@ -102,6 +103,7 @@ export function BookingWizardModal({
   onClose,
   initialService = null,
   onBookingCreated,
+  onPaymentUpdated,
 }) {
   const { user } = useAuth();
 
@@ -149,6 +151,20 @@ export function BookingWizardModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBooking, setCreatedBooking] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const {
+    paymentStatus,
+    isPaying,
+    paymentMessage,
+    handlePayment,
+    downloadInvoice,
+    retryingVerification,
+    paymentsEnabled,
+  } = useBookingPayment({
+    booking: createdBooking,
+    customer: user,
+    onBookingUpdated: setCreatedBooking,
+    onPaymentUpdated,
+  });
 
   // Initialize modal state when opened or initialService changes
   useEffect(() => {
@@ -544,6 +560,7 @@ export function BookingWizardModal({
 
           <button
             onClick={onClose}
+            disabled={isPaying}
             className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center transition-colors"
           >
             <X className="w-5 h-5" />
@@ -651,19 +668,41 @@ export function BookingWizardModal({
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Statutory Floor Wage:</span>
+                  <span className="text-slate-500">Booking amount:</span>
                   <span className="font-bold text-slate-900">
-                    ₹{createdBooking.price?.totalAmount || 900} (0% Middleman
-                    Cut)
+                    ₹{createdBooking.price?.totalAmount ?? 0}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
                   <span className="text-slate-500">Actual Payment State:</span>
-                  <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    Payment Pending Authorization on Acceptance
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded border ${paymentStatus === "escrow_locked" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : paymentStatus === "released" ? "text-green-700 bg-green-50 border-green-200" : "text-amber-700 bg-amber-50 border-amber-200"}`}
+                  >
+                    {paymentStatusLabel(
+                      !paymentsEnabled &&
+                        ["pending", "failed"].includes(paymentStatus)
+                        ? "not_required"
+                        : paymentStatus,
+                    )}
                   </span>
                 </div>
+
+                {createdBooking.paymentProvider?.invoiceUrl && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Digital invoice:</span>
+                    <a
+                      className="font-bold text-brand-saffron-700 underline"
+                      href="#invoice"
+                      onClick={async (event) => {
+                        event.preventDefault();
+                        await downloadInvoice();
+                      }}
+                    >
+                      Download PDF
+                    </a>
+                  </div>
+                )}
 
                 <div className="flex justify-between">
                   <span className="text-slate-500">Work verification:</span>
@@ -688,8 +727,38 @@ export function BookingWizardModal({
                 </div>
               </div>
 
+              {paymentMessage && (
+                <p
+                  role="status"
+                  className="max-w-md mx-auto mb-3 text-xs text-slate-700"
+                >
+                  {paymentMessage}
+                </p>
+              )}
+
               <div className="pt-2 flex justify-center gap-3">
-                <Button variant="primary" size="md" onClick={onClose}>
+                {paymentsEnabled &&
+                  ["pending", "failed"].includes(paymentStatus) && (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      disabled={isPaying}
+                      icon={ShieldCheck}
+                      onClick={handlePayment}
+                    >
+                      {isPaying
+                        ? "Confirming payment…"
+                        : retryingVerification
+                          ? "Retry verification"
+                          : `Pay ₹${createdBooking.price?.totalAmount ?? 0}`}
+                    </Button>
+                  )}
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={onClose}
+                  disabled={isPaying}
+                >
                   Track in Customer Dashboard
                 </Button>
               </div>
@@ -1345,7 +1414,7 @@ export function BookingWizardModal({
                     </div>
 
                     <div className="flex items-center justify-between pt-1 text-sm font-extrabold text-slate-900">
-                      <span>Total Payable Amount:</span>
+                      <span>Estimated Payable Amount:</span>
                       <span className="text-brand-saffron-700 text-base">
                         ₹{(selectedWorker?.rates?.hourlyRate || 450) * 2}
                       </span>
@@ -1356,16 +1425,13 @@ export function BookingWizardModal({
                   <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-950 flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold">
-                        Transparent Payment State: Authorization on Service
-                        Acceptance
-                      </p>
+                      <p className="font-bold">Secure payment after booking</p>
                       <p className="text-amber-900 text-[11px] mt-0.5 leading-relaxed">
-                        No advance payment is deducted right now. Escrow payment
-                        authorization is requested once your selected artisan or
-                        cooperative accepts the job. Funds are held in sovereign
-                        escrow and released only upon your QR / OTP handshake at
-                        completion.
+                        Review the confirmed booking amount, then pay through
+                        Razorpay Checkout. Verified payment locks the booking
+                        escrow before Start OTP verification. End OTP
+                        verification releases the payment and makes your invoice
+                        available.
                       </p>
                     </div>
                   </div>
