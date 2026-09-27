@@ -3,9 +3,11 @@ import mongoose from 'mongoose';
 import { Booking } from '../models/Booking.model.js';
 import { BookingService, normalizeStatus, normalizeRole } from './booking.service.js';
 import { AppError } from '../utils/AppError.js';
+import { bookingNotification } from './notification.service.js';
 
 const stages = { start: ['ON_THE_WAY', 'IN_PROGRESS', 'startOTP'], end: ['IN_PROGRESS', 'COMPLETED', 'endOTP'] };
 const hash = (code, salt) => scryptSync(code, salt, 32).toString('hex');
+const validStageStatus = (status, required) => normalizeStatus(status) === required || (required === 'ON_THE_WAY' && normalizeStatus(status) === 'ARRIVED');
 
 export function publicBooking(value) {
   const data = value.toObject ? value.toObject({ virtuals: true }) : structuredClone(value);
@@ -21,7 +23,7 @@ export async function issueWorkOtp(id, stage, actor, role) {
   const booking = await BookingService.getBookingById(id, actor, role);
   if (normalizeRole(role) !== 'USER') throw new AppError('Only the booking customer may request a code', 403);
   const [required, , field] = stages[stage];
-  if (normalizeStatus(booking.status) !== required) throw new AppError('Verification is not available at this stage', 409);
+  if (!validStageStatus(booking.status, required)) throw new AppError('Verification is not available at this stage', 409);
   const previous = booking[field];
   if (previous?.issuedAt && Date.now() - new Date(previous.issuedAt).getTime() < 30000) throw new AppError('Wait 30 seconds before requesting another code', 429);
   let code;
@@ -34,6 +36,7 @@ export async function issueWorkOtp(id, stage, actor, role) {
     }, { $set: { [field]: otp } });
     if (!saved) throw new AppError('Booking changed or a code was just issued; refresh and retry', 409);
   } else booking[field] = otp;
+  await bookingNotification(booking, 'OTP_GENERATED');
   return { code, expiresAt: otp.expiresAt, stage };
 }
 
@@ -43,7 +46,7 @@ export async function verifyWorkOtp(id, stage, code, actor, role) {
   if (normalizeRole(role) !== 'WORKER') throw new AppError('Only the assigned worker may verify a code', 403);
   const [required, next, field] = stages[stage];
   const otp = booking[field];
-  if (normalizeStatus(booking.status) !== required || !otp?.hash || otp.usedAt || new Date(otp.expiresAt) <= new Date() || otp.attempts >= 5) throw new AppError('Code unavailable, expired, used, or locked. Ask the customer for a new code.', 409);
+  if (!validStageStatus(booking.status, required) || !otp?.hash || otp.usedAt || new Date(otp.expiresAt) <= new Date() || otp.attempts >= 5) throw new AppError('Code unavailable, expired, used, or locked. Ask the customer for a new code.', 409);
   const valid = timingSafeEqual(Buffer.from(otp.hash, 'hex'), Buffer.from(hash(String(code), otp.salt), 'hex'));
   const filter = { _id: booking._id, status: booking.status, [`${field}.hash`]: otp.hash, [`${field}.usedAt`]: null, [`${field}.attempts`]: { $lt: 5 }, [`${field}.expiresAt`]: { $gt: new Date() } };
   if (!valid) {
@@ -62,6 +65,9 @@ export async function verifyWorkOtp(id, stage, code, actor, role) {
   if (mongoose.connection.readyState === 1) {
     const saved = await Booking.findOneAndUpdate(filter, { $set: fields, $push: { statusHistory: event, timelineEvents: event } }, { new: true });
     if (!saved) throw new AppError('Code already consumed or booking changed', 409);
+    await bookingNotification(saved, next);
+    await bookingNotification(saved, stage === 'start' ? 'START_OTP_VERIFIED' : 'END_OTP_VERIFIED');
+    if (stage === 'end' && saved.paymentStatus === 'released' && booking.paymentStatus !== 'released') await bookingNotification(saved, 'PAYMENT_RELEASED');
     return publicBooking(saved);
   }
   booking.status = next;

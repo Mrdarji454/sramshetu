@@ -1,4 +1,5 @@
 import { User } from '../models/User.model.js';
+import { safelyNotify, notifyWorker, notifyCooperative } from './notification.service.js';
 import { Cooperative } from '../models/Cooperative.model.js';
 import { Worker, WorkerProfile } from '../models/WorkerProfile.model.js';
 import { Booking } from '../models/Booking.model.js';
@@ -730,8 +731,10 @@ export class AdminService {
           { new: true }
         );
 
+        if (!worker) throw new AppError('Worker not found', 404);
         if (worker) {
           await User.findByIdAndUpdate(worker.user, { isVerified: status === 'verified' });
+          await safelyNotify(() => notifyWorker(worker._id, { type: status === 'verified' ? 'VERIFICATION_APPROVED' : 'VERIFICATION_REJECTED', title: `Profile verification ${status === 'verified' ? 'approved' : 'rejected'}`, message: remarks || `Your worker verification was ${status}.` }));
         }
         return { applicantId: cleanId, applicantType: 'worker', status, registrationStatus: newRegStatus, remarks };
       }
@@ -769,8 +772,10 @@ export class AdminService {
           { new: true }
         );
 
+        if (!coop) throw new AppError('Cooperative not found', 404);
         if (coop) {
           await User.updateMany({ cooperativeId: coop._id }, { isVerified: status === 'verified' });
+          await safelyNotify(() => notifyCooperative(coop._id, { type: status === 'verified' ? 'VERIFICATION_APPROVED' : 'VERIFICATION_REJECTED', title: 'Verification status updated', message: remarks || `Your cooperative verification was ${status}.` }));
         }
         return { applicantId: cleanId, applicantType: 'cooperative', status, remarks };
       }

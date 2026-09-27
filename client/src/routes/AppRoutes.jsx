@@ -26,6 +26,7 @@ const WorkerProfilePage = lazy(() =>
     default: module.WorkerProfilePage,
   })),
 );
+import { NotificationsPage } from "../features/notifications/NotificationsPage";
 
 function WorkerOnboardingPage() {
   const [loading, setLoading] = useState(true);
@@ -134,6 +135,14 @@ function AdminVerificationsPage() {
 export function AppRoutes() {
   return (
     <Routes>
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
       {/* Public Routes */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />

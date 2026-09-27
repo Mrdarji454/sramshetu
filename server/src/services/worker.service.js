@@ -981,6 +981,12 @@ export class WorkerService {
           uploadedAt: eshramDoc?.url ? new Date() : currentDocs.eshramCard?.uploadedAt || null,
         },
       };
+      for (const [kind, input] of Object.entries({ aadhaar: aadhaarDoc, addressProof: addressProofDoc, eshramCard: eshramDoc })) {
+        const value = input?.expiresAt === undefined ? currentDocs[kind]?.expiresAt : input.expiresAt;
+        const expiry = value ? new Date(value) : null;
+        if (expiry && !Number.isFinite(expiry.getTime())) throw new AppError('Invalid document expiry date', 400);
+        newDocs[kind].expiresAt = expiry;
+      }
       updateFields.documents = newDocs;
       if (newDocs.eshramCard.url) updateFields.eshramProvided = true;
 

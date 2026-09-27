@@ -80,6 +80,7 @@ const bookingSchema = new mongoose.Schema(
       serviceAddress: {
         street: { type: String, trim: true },
         city: { type: String, trim: true, index: true },
+        district: { type: String, trim: true, index: true },
         state: { type: String, trim: true },
         pincode: { type: String, trim: true, index: true },
         landmark: { type: String, trim: true },
@@ -116,6 +117,7 @@ const bookingSchema = new mongoose.Schema(
           'ACCEPTED',
           'REJECTED',
           'ON_THE_WAY',
+          'ARRIVED',
           'IN_PROGRESS',
           'COMPLETED',
           'CANCELLED',

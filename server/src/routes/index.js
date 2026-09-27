@@ -1,4 +1,5 @@
 import reviewRoutes from './review.routes.js';
+import notificationRoutes from './notification.routes.js';
 import { Router } from 'express';
 import authRoutes from './auth.routes.js';
 import userRoutes from './user.routes.js';
@@ -25,6 +26,7 @@ apiRouter.get('/health', (req, res) => {
 
 // Resource routes under /api and /api/v1
 apiRouter.use('/auth', authRoutes);
+apiRouter.use('/notifications', notificationRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/workers', workerRoutes);
 apiRouter.use('/cooperatives', cooperativeRoutes);

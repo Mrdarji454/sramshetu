@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Logo } from "./Logo";
+import { NotificationBell } from "./NotificationBell";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { useAuth, getRoleDashboardPath } from "../../context/AuthContext";
@@ -165,6 +166,7 @@ export function Navbar() {
             </div>
 
             {/* Desktop Right Side CTA & Portals */}
+            {isAuthenticated && <NotificationBell />}
             <div className="hidden md:flex items-center gap-2.5">
               {isAuthenticated && user ? (
                 /* Logged In View */

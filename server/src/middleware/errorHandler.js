@@ -1,4 +1,5 @@
 import { AppError } from '../utils/AppError.js';
+import { safelyNotify, notifyAdmins } from '../services/notification.service.js';
 import { config } from '../config/env.js';
 
 export function errorHandler(err, req, res, next) {
@@ -44,6 +45,10 @@ export function errorHandler(err, req, res, next) {
   }
 
   // Send structured JSON error response
+  if (error.statusCode >= 500 && !req.originalUrl?.includes('/notifications')) {
+    const route = req.route?.path || 'unmatched';
+    void safelyNotify(() => notifyAdmins({ type: 'API_FAILURE', title: 'System/API failure', message: `A ${req.method} ${route} request failed. Check server logs for details.`, eventKey: `api:${req.method}:${route}:${Math.floor(Date.now() / 300000)}` }));
+  }
   res.status(error.statusCode || 500).json({
     success: false,
     message: error.message || 'Internal Server Error',

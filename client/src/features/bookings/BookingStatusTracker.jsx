@@ -69,6 +69,7 @@ export function getStatusStepIndex(status) {
     case "ACCEPTED":
       return 2;
     case "ON_THE_WAY":
+    case "ARRIVED":
       return 3;
     case "IN_PROGRESS":
       return 4;
@@ -288,7 +289,7 @@ export function BookingStatusTracker({
 
       <p className="my-4 text-sm font-semibold">Payment: {{ pending: 'Pending', held: 'Escrow Locked', escrow_locked: 'Escrow Locked', released: 'Released' }[booking.paymentStatus] || booking.paymentStatus}</p>
       {currentStatus === 'ON_THE_WAY' && <LiveTrackingMap booking={booking} />}
-      {['ON_THE_WAY', 'IN_PROGRESS'].includes(currentStatus) && <WorkVerificationPanel booking={booking} />}
+      {['ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'].includes(currentStatus) && <WorkVerificationPanel booking={booking} />}
       {isCompleted && <BookingReview booking={booking} />}
 
       {/* Worker & Location Details Card */}

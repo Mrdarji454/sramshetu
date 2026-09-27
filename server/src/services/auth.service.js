@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { safelyNotify, notifyAdmins } from './notification.service.js';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.model.js';
 import { config } from '../config/env.js';
@@ -124,6 +125,8 @@ export class AuthService {
       }
 
       const token = this.generateToken(user);
+
+      if (['WORKER', 'COOPERATIVE'].includes(normalizedRole)) await safelyNotify(() => notifyAdmins({ type: `${normalizedRole}_REGISTERED`, title: `New ${normalizedRole.toLowerCase()} registration`, message: 'A new account has registered on ShramSetu.', eventKey: `registration:${user._id}` }));
 
       return {
         user: {

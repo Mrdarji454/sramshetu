@@ -1,6 +1,7 @@
 import React from "react";
 import { getRoleDashboardPath, useAuth } from "../context/AuthContext";
 import { Logo } from "../components/common/Logo";
+import { NotificationBell } from "../components/common/NotificationBell";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import {
@@ -84,6 +85,7 @@ export function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <Link to="/">
               <Button
                 variant="ghost"

@@ -6,7 +6,7 @@ export function WorkVerificationPanel({ booking }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
-  const stage = booking.status?.toUpperCase() === 'ON_THE_WAY' ? 'start' : 'end';
+  const stage = ['ON_THE_WAY', 'ARRIVED'].includes(booking.status?.toUpperCase()) ? 'start' : 'end';
   useEffect(() => { setOtp(null); setError(''); }, [booking._id || booking.id, stage]);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const seconds = otp ? Math.max(0, Math.ceil((new Date(otp.expiresAt).getTime() - now) / 1000)) : 0;
