@@ -72,6 +72,14 @@ export const workerService = {
     const response = await apiClient.get('/workers/assigned-jobs');
     return response.data || response;
   },
+
+  /**
+   * Update worker profile (bio, phone, working radius, etc.)
+   */
+  async updateProfile(profileData) {
+    const response = await apiClient.patch('/workers/profile', profileData);
+    return response.data || response;
+  },
 };
 
 export default workerService;
