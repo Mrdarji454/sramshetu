@@ -1,6 +1,7 @@
 import { publicBooking } from '../services/bookingVerification.service.js';
 import { safelyNotify, notifyAdmins, notifyCooperative } from '../services/notification.service.js';
 import { WorkerService } from '../services/worker.service.js';
+import { getPendingZoneShiftOffers, respondToZoneShift } from '../services/zoneShift.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
 
@@ -95,4 +96,17 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const updated = await WorkerService.updateProfile(userId, req.body);
   return successResponse(res, updated, 'Profile updated successfully', 200);
+});
+
+export const getZoneShiftOffer = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const offer = await getPendingZoneShiftOffers(userId);
+  return successResponse(res, offer, 'Zone shift offers retrieved', 200);
+});
+
+export const respondZoneShift = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const { decision } = req.body;
+  const result = await respondToZoneShift(userId, decision);
+  return successResponse(res, result, `Zone shift ${decision === 'accept' ? 'accepted' : 'declined'}`, 200);
 });

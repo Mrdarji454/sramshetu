@@ -15,6 +15,16 @@ router.use(authenticate, authorizeRoles('worker', 'admin'));
 // GET /api/v1/workers/profile
 router.get('/profile', workerController.getProfile);
 
+// GET /api/v1/workers/zone-shift-offers
+router.get('/zone-shift-offers', workerController.getZoneShiftOffer);
+
+// POST /api/v1/workers/zone-shift/decision
+router.post(
+  '/zone-shift/decision',
+  [body('decision').isIn(['accept', 'decline']).withMessage('Decision must be accept or decline'), validate],
+  workerController.respondZoneShift
+);
+
 // PATCH /api/v1/workers/profile — update editable fields (bio, phone, workingRadiusKm)
 router.patch(
   '/profile',

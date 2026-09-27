@@ -3,6 +3,7 @@ import { safelyNotify, notifyAdmins, notifyCooperative } from '../services/notif
 import { CooperativeService } from '../services/cooperative.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
+import { getCooperativeZoneShiftSuggestions } from '../services/zoneShift.service.js';
 
 export const getProfile = asyncHandler(async (req, res) => {
   const cooperativeId = req.user.cooperativeId || req.user._id || req.user.id;
@@ -60,4 +61,10 @@ export const assignWorker = asyncHandler(async (req, res) => {
   const { bookingId, workerId } = req.body;
   const assignment = await CooperativeService.assignWorker(bookingId, workerId, cooperativeUserId, role);
   return successResponse(res, assignment, 'Worker assigned successfully', 200);
+});
+
+export const getZoneShiftSuggestions = asyncHandler(async (req, res) => {
+  const cooperativeId = req.user.cooperativeId || req.user._id || req.user.id;
+  const suggestions = await getCooperativeZoneShiftSuggestions(cooperativeId);
+  return successResponse(res, suggestions, 'Zone shift suggestions retrieved', 200);
 });

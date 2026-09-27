@@ -44,6 +44,9 @@ router.post(
 // GET /api/v1/admin/live-dispatch
 router.get('/live-dispatch', adminController.getLiveDispatch);
 
+// GET /api/v1/admin/zone-shift-recommendations
+router.get('/zone-shift-recommendations', adminController.getZoneShiftRecommendations);
+
 // GET /api/v1/admin/complaints
 router.get('/complaints', adminController.getComplaints);
 

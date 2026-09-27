@@ -158,6 +158,8 @@ export function WorkerProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [zoneShiftOffers, setZoneShiftOffers] = useState([]);
+  const [zoneShiftDecisionLoading, setZoneShiftDecisionLoading] = useState(false);
   const [earningsRange, setEarningsRange] = useState("monthly");
   const [calendarMonth, setCalendarMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -168,14 +170,17 @@ export function WorkerProfilePage() {
     serviceRadiusKm: 15,
   });
   const [lookingUpPin, setLookingUpPin] = useState(false);
+  const zoneShiftOffer = zoneShiftOffers[0] || null;
 
   const loadPage = async () => {
     setLoading(true);
     setError("");
-    const [profileResult, jobsResult] = await Promise.allSettled([
-      workerService.getProfile(),
-      bookingService.getBookings({ role: "worker" }),
-    ]);
+    const [profileResult, jobsResult, zoneShiftResult] =
+      await Promise.allSettled([
+        workerService.getProfile(),
+        bookingService.getBookings({ role: "worker" }),
+        workerService.getZoneShiftOffers(),
+      ]);
     if (profileResult.status === "fulfilled")
       setProfile(normalizePayload(profileResult.value));
     else
@@ -185,6 +190,14 @@ export function WorkerProfilePage() {
         ? jobsResult.value
         : [],
     );
+    if (zoneShiftResult.status === "fulfilled") {
+      const nextOffers = Array.isArray(zoneShiftResult.value)
+        ? zoneShiftResult.value
+        : Array.isArray(zoneShiftResult.value?.offers)
+          ? zoneShiftResult.value.offers
+          : [];
+      setZoneShiftOffers(nextOffers);
+    }
     if (profileResult.status === "fulfilled") {
       const worker = normalizePayload(profileResult.value);
       const workerId = worker?._id || worker?.id;
@@ -232,6 +245,32 @@ export function WorkerProfilePage() {
       setError(saveError.message || "Unable to save profile.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleZoneShiftDecision = async (decision) => {
+    setZoneShiftDecisionLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await workerService.respondToZoneShift(decision);
+      const acceptedOffer = result?.offer || zoneShiftOffer;
+      setZoneShiftOffers((previous) =>
+        previous.filter(
+          (item) =>
+            (item?._id || item?.id || item?.workerId) !==
+            (acceptedOffer?._id || acceptedOffer?.id || acceptedOffer?.workerId),
+        ),
+      );
+      setNotice(
+        decision === "accept"
+          ? "Zone shift accepted. Your service zone has been updated."
+          : "Zone shift declined. You will remain in your current zone.",
+      );
+    } catch (zoneShiftError) {
+      setError(zoneShiftError.message || "Unable to update your zone shift." );
+    } finally {
+      setZoneShiftDecisionLoading(false);
     }
   };
 

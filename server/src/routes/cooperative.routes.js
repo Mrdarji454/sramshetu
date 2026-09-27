@@ -53,6 +53,9 @@ router.delete('/members/:memberId', authorizeRoles('cooperative', 'admin'), coop
 // GET /api/v1/cooperatives/requests
 router.get('/requests', authorizeRoles('cooperative', 'admin'), cooperativeController.getIncomingRequests);
 
+// GET /api/v1/cooperatives/zone-shift-suggestions
+router.get('/zone-shift-suggestions', authorizeRoles('cooperative', 'admin'), cooperativeController.getZoneShiftSuggestions);
+
 // POST /api/v1/cooperatives/assign-worker
 router.post(
   '/assign-worker',

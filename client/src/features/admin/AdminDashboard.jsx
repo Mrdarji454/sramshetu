@@ -100,13 +100,18 @@ export function AdminDashboard() {
   const [prediction, setPrediction] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
 
+  // Zone Shift Recommendations State
+  const [zoneShiftRecommendations, setZoneShiftRecommendations] = useState([]);
+  const [zoneShiftLoading, setZoneShiftLoading] = useState(false);
+
   // Load Platform Telemetry & Live Dispatch Data
   const fetchAllData = async (isManual = false) => {
     if (isManual) setIsRefreshing(true);
     try {
-      const [statsRes, dispatchRes] = await Promise.allSettled([
+      const [statsRes, dispatchRes, zoneShiftRes] = await Promise.allSettled([
         adminService.getSystemStats(),
         adminService.getLiveDispatch(),
+        adminService.getZoneShiftRecommendations(),
       ]);
 
       if (statsRes.status === 'fulfilled' && statsRes.value) {
@@ -121,6 +126,11 @@ export function AdminDashboard() {
           const firstOngoing = dData.customerRequests.find((b) => ['in_progress', 'on_the_way', 'assigned'].includes(b.status)) || dData.customerRequests[0];
           setSelectedBooking(firstOngoing);
         }
+      }
+
+      if (zoneShiftRes.status === 'fulfilled') {
+        const recommendations = Array.isArray(zoneShiftRes.value) ? zoneShiftRes.value : [];
+        setZoneShiftRecommendations(recommendations);
       }
     } catch (err) {
       console.error('Error refreshing admin command center:', err);
@@ -189,6 +199,26 @@ export function AdminDashboard() {
     const q = searchQuery.toLowerCase();
     return w.name?.toLowerCase().includes(q) || w.profession?.toLowerCase().includes(q) || w.cooperative?.toLowerCase().includes(q);
   });
+
+  const handleMapFilterChange = (nextFilter) => {
+    setMapFilter(nextFilter);
+    setShowHeatMap(nextFilter === 'heatmap');
+  };
+
+  const handleOpenPendingVerifications = () => {
+    setActiveTab('verifications');
+  };
+
+  const handleToggleHeatMap = () => {
+    const nextState = !(mapFilter === 'heatmap' || showHeatMap);
+    setShowHeatMap(nextState);
+    setMapFilter(nextState ? 'heatmap' : 'all');
+  };
+
+  const pendingVerificationCount = Number(stats.pendingVerifications || 0);
+
+  const pendingStatusValues = ['pending', 'pending_approval', 'pending-admin-approval', 'PENDING_APPROVAL', 'PENDING'];
+  const normalizeVerificationStatus = (status) => String(status || '').trim().toLowerCase();
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900">
@@ -418,11 +448,7 @@ export function AdminDashboard() {
                     return (
                       <button
                         key={chip.id}
-                        onClick={() => {
-                          setMapFilter(chip.id);
-                          if (chip.id === 'heatmap') setShowHeatMap(true);
-                          else setShowHeatMap(false);
-                        }}
+                        onClick={() => handleMapFilterChange(chip.id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                           isChipActive
                             ? 'bg-brand-navy-900 text-white border-brand-navy-900 shadow-sm'
@@ -435,16 +461,21 @@ export function AdminDashboard() {
                   })}
                 </div>
 
-                {/* Search Worker / Area Input */}
-                <div className="relative w-full sm:w-64">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search artisan or guild..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-saffron-500 font-medium"
-                  />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleHeatMap}
+                    className="px-3 py-1.5 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 text-xs font-bold hover:bg-purple-100"
+                  >
+                    {showHeatMap || mapFilter === 'heatmap' ? 'Hide Heat Map' : 'Show Heat Map'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenPendingVerifications}
+                    className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100"
+                  >
+                    Verify Pending ({pendingVerificationCount})
+                  </button>
                 </div>
               </div>
 
@@ -795,38 +826,65 @@ export function AdminDashboard() {
               </div>
             </div>
           )}
+
+          {/* Zone Shift Recommendations & Demand Alerts Cards (Newly Added) */}
+          {(activeTab === 'dashboard' || activeTab === 'dispatch') && (
+            <div className="mb-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-700">Zone shift</p>
+                    <h3 className="mt-2 text-lg font-extrabold text-slate-900">Recommended worker reassignment</h3>
+                  </div>
+                  <div className="rounded-full bg-indigo-100 text-indigo-700 p-2">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                </div>
+
+                {zoneShiftRecommendations.length === 0 ? (
+                  <p className="mt-4 text-sm text-slate-600">No active zone shift recommendations right now.</p>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {zoneShiftRecommendations.slice(0, 3).map((item) => (
+                      <div key={item.workerId || item.zone} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-bold text-slate-900">{item.zone || 'Target Zone'}</span>
+                          <Badge variant={item.priority === 'High' ? 'verified' : 'saffron'} size="sm">{item.priority || 'Medium'}</Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-600">
+                          Worker: {item.suggestedWorkers?.[0] || item.workerId || 'Worker'} • Skill: {item.requiredSkill || 'General'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Demand alerts</p>
+                    <h3 className="mt-2 text-lg font-extrabold text-slate-900">Current hot zones</h3>
+                  </div>
+                  <div className="rounded-full bg-amber-100 text-amber-700 p-2">
+                    <Flame className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {(dispatchData.zones || []).slice(0, 3).map((zone) => (
+                    <div key={zone.name || zone.zone || zone.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold text-slate-900">{zone.name || zone.zone || 'Zone'}</span>
+                        <span className="text-xs font-bold text-amber-700">{zone.requests || zone.count || 0}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </main>
-      </div>
-
-      {/* FLOATING ADMIN QUICK ACTION DOCK */}
-      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-white/95 backdrop-blur-md p-2 rounded-2xl border border-slate-200 shadow-2xl">
-        <button
-          onClick={() => setActiveTab('verifications')}
-          className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-sm"
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Verify Pending ({stats.pendingVerifications})</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('dispatch');
-            setShowHeatMap(true);
-            setMapFilter('heatmap');
-          }}
-          className="px-3 py-2 rounded-xl bg-brand-saffron-500 hover:bg-brand-saffron-600 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-sm"
-        >
-          <Flame className="w-3.5 h-3.5" />
-          <span>Zone Heat Map</span>
-        </button>
-
-        <button
-          onClick={() => fetchAllData(true)}
-          title="Refresh All Stream Feeds"
-          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
-        >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-brand-saffron-600' : ''}`} />
-        </button>
       </div>
     </div>
   );

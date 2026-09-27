@@ -50,6 +50,14 @@ export const adminService = {
     const response = await apiClient.get('/admin/live-dispatch');
     return response.data || response;
   },
+
+  /**
+   * Get zone shift recommendations and shortage/oversupply alerts
+   */
+  async getZoneShiftRecommendations() {
+    const response = await apiClient.get('/admin/zone-shift-recommendations');
+    return response.data || response;
+  },
 };
 
 export default adminService;
