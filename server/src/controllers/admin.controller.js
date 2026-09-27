@@ -28,6 +28,11 @@ export const reviewVerification = asyncHandler(async (req, res) => {
   return successResponse(res, result, `Applicant ${status === 'verified' ? 'verified' : 'rejected'} successfully`, 200);
 });
 
+export const getLiveDispatch = asyncHandler(async (req, res) => {
+  const dispatchData = await AdminService.getLiveDispatchData();
+  return successResponse(res, dispatchData, 'Live dispatch command data retrieved', 200);
+});
+
 export const getComplaints = asyncHandler(async (req, res) => {
   const complaints = await AdminService.getComplaints();
   return successResponse(res, complaints, 'Grievance complaints retrieved', 200);

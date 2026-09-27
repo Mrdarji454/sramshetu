@@ -41,6 +41,9 @@ router.post(
   adminController.reviewVerification
 );
 
+// GET /api/v1/admin/live-dispatch
+router.get('/live-dispatch', adminController.getLiveDispatch);
+
 // GET /api/v1/admin/complaints
 router.get('/complaints', adminController.getComplaints);
 

@@ -42,6 +42,14 @@ export const adminService = {
     const response = await apiClient.get('/admin/complaints');
     return response.data || response;
   },
+
+  /**
+   * Get Live Dispatch Command Center Data
+   */
+  async getLiveDispatch() {
+    const response = await apiClient.get('/admin/live-dispatch');
+    return response.data || response;
+  },
 };
 
 export default adminService;
