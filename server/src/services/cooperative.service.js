@@ -466,37 +466,88 @@ export class CooperativeService {
       const coopId = coop?._id || cleanId;
 
       // Query workers enrolled in this cooperative
-      const workers = await Worker.find({ cooperative: coopId }).populate('user', 'name phone email profileImage');
-      if (workers && workers.length > 0) {
-        return workers.map((w) => ({
+      const workers = await Worker.find({ cooperative: coopId }).populate('user', 'name phone email profileImage isActive');
+      return workers.map((w) => {
+        const coordinates = w.liveLocation?.coordinates?.length === 2
+          ? w.liveLocation.coordinates
+          : Number.isFinite(w.address?.longitude) && Number.isFinite(w.address?.latitude)
+            ? [w.address.longitude, w.address.latitude]
+            : null;
+        return {
           id: String(w._id),
           _id: String(w._id),
           userId: w.user?._id || w.user,
           name: w.user?.name || w.name || 'Artisan',
-          phone: w.user?.phone || w.phone || '+91 98000 00000',
+          phone: w.user?.phone || w.phone || '',
+          email: w.user?.email || w.email || '',
+          profileImage: w.user?.profileImage || w.profileImage || null,
           trade: w.experience?.primaryTrade || w.primaryTrade || 'General Artisan',
+          profession: w.profession || w.experience?.primaryTrade || w.primaryTrade || '',
           primaryTrade: w.experience?.primaryTrade || w.primaryTrade || 'General Artisan',
           subTrades: w.experience?.subTrades || [],
           skills: (w.skills || []).map((s) => s.name || s),
           experienceYears: w.experience?.years || 0,
-          dailyFloorRate: w.rates?.dailyFloorRate || 1200,
-          hourlyRate: w.rates?.hourlyRate || 400,
+          dailyFloorRate: w.rates?.dailyFloorRate ?? null,
+          hourlyRate: w.rates?.hourlyRate ?? null,
           status: w.availability?.status || 'available',
-          rating: w.rating?.average || 4.9,
-          jobsCompleted: w.rating?.totalJobs || 0,
+          availability: w.availability,
+          coordinates,
+          address: w.address || w.location?.address || null,
+          lastUpdated: w.liveLocation?.updatedAt || w.updatedAt || null,
+          isActive: w.user?.isActive !== false,
+          rating: w.rating?.average ?? null,
+          ratingCount: w.rating?.count ?? 0,
+          jobsCompleted: w.jobsCompleted ?? 0,
           isVerified: w.verificationStatus?.aadhaarVerified || false,
           aadhaarVerified: w.verificationStatus?.aadhaarVerified || false,
           nsdcCertified: w.verificationStatus?.nsdcCertified || false,
-        }));
-      }
-
-      if (coop && coop.members && coop.members.length > 0) {
-        return coop.members;
-      }
+        };
+      });
     }
 
-    const coop = await this.getProfile(cleanId);
-    return coop.members || [];
+    const { inMemoryWorkers } = await import('./worker.service.js');
+    return [...inMemoryWorkers.values()]
+      .filter((worker) => {
+        const workerCooperativeId = String(
+          worker.cooperative?._id || worker.cooperative?.id || worker.cooperativeId || worker.cooperative || '',
+        );
+        return workerCooperativeId === cleanId;
+      })
+      .map((worker) => ({
+        id: String(worker._id || worker.id),
+        _id: String(worker._id || worker.id),
+        userId: worker.userId || worker.user?._id || worker.user || null,
+        name: worker.name || 'Artisan',
+        phone: worker.phone || '',
+        email: worker.email || '',
+        profileImage: worker.profileImage || null,
+        trade: worker.experience?.primaryTrade || worker.trade || '',
+        profession: worker.profession || worker.experience?.primaryTrade || worker.trade || '',
+        primaryTrade: worker.experience?.primaryTrade || worker.trade || '',
+        subTrades: worker.experience?.subTrades || [],
+        skills: (worker.skills || []).map((skill) => skill.name || skill),
+        experienceYears: worker.experience?.years || 0,
+        dailyFloorRate: worker.rates?.dailyFloorRate ?? null,
+        hourlyRate: worker.rates?.hourlyRate ?? null,
+        status: worker.availability?.status || 'offline',
+        availability: worker.availability || null,
+        coordinates: worker.liveLocation?.coordinates || (
+          Number.isFinite(worker.address?.longitude) && Number.isFinite(worker.address?.latitude)
+            ? [worker.address.longitude, worker.address.latitude]
+            : Number.isFinite(worker.longitude) && Number.isFinite(worker.latitude)
+              ? [worker.longitude, worker.latitude]
+              : null
+        ),
+        address: worker.address || worker.location?.address || null,
+        lastUpdated: worker.liveLocation?.updatedAt || worker.updatedAt || null,
+        isActive: true,
+        rating: worker.rating?.average ?? null,
+        ratingCount: worker.rating?.count ?? 0,
+        jobsCompleted: worker.jobsCompleted ?? 0,
+        isVerified: Boolean(worker.verificationStatus?.aadhaarVerified),
+        aadhaarVerified: Boolean(worker.verificationStatus?.aadhaarVerified),
+        nsdcCertified: Boolean(worker.verificationStatus?.nsdcCertified),
+      }));
   }
 
   /**

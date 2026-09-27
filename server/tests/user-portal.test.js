@@ -3,6 +3,7 @@ import { BookingService, inMemoryBookings } from '../src/services/booking.servic
 import { issueWorkOtp, verifyWorkOtp, publicBooking } from '../src/services/bookingVerification.service.js';
 import { submitReview } from '../src/services/review.service.js';
 import { MatchingService } from '../src/services/matching.service.js';
+import { CooperativeService } from '../src/services/cooperative.service.js';
 import { rankWithAiFallback, manualRank } from '../src/services/smartMatching.service.js';
 import { inMemoryWorkers } from '../src/services/worker.service.js';
 import app from '../src/app.js';
@@ -12,6 +13,15 @@ import { config } from '../src/config/env.js';
 const customer = '65f123456789012345678901', worker = '65f123456789012345678902', coop = '65f123456789012345678903';
 let passed = 0;
 async function test(name, action) { await action(); passed++; console.log(`PASS: ${name}`); }
+await test('Cooperative roster contains only its linked workers and includes live profile fields', async () => {
+  const firstRoster = await CooperativeService.getMembers('65f123456789012345678903');
+  const secondRoster = await CooperativeService.getMembers('65f123456789012345678904');
+  assert(firstRoster.length > 0);
+  assert(secondRoster.length > 0);
+  assert(firstRoster.every(member => Array.isArray(member.coordinates) && member.coordinates.length === 2));
+  assert(firstRoster.every(member => member.profileImage !== undefined && member.lastUpdated !== undefined));
+  assert(!firstRoster.some(member => secondRoster.some(other => other.id === member.id)));
+});
 const booking = await BookingService.createBooking(customer, {
   serviceName: 'Electrical', trade: 'Electrical', workerId: worker, cooperativeId: coop,
   location: { coordinates: [73.8058, 18.5074], serviceAddress: { street: 'Test Street', city: 'Pune' } },

@@ -15,7 +15,13 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
-export function DashboardLayout({ title, subtitle, roleBadge, children }) {
+export function DashboardLayout({
+  title,
+  subtitle,
+  roleBadge,
+  organization,
+  children,
+}) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -59,6 +65,22 @@ export function DashboardLayout({ title, subtitle, roleBadge, children }) {
                 Portal: {(user?.role || "USER").toUpperCase()}
               </Badge>
             </div>
+            {organization?.name && (
+              <div className="flex min-w-0 items-center gap-2 border-l border-slate-200 pl-3">
+                {organization.logo ? (
+                  <img
+                    src={organization.logo}
+                    alt=""
+                    className="h-8 w-8 shrink-0 rounded-md border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <Building2 className="h-4 w-4 shrink-0 text-brand-saffron-600" />
+                )}
+                <span className="hidden max-w-48 truncate text-xs font-semibold text-slate-700 lg:block">
+                  {organization.name}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
