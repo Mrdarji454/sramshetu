@@ -78,13 +78,23 @@ export function DashboardLayout({ title, subtitle, roleBadge, children }) {
               to={
                 ["USER", "CUSTOMER"].includes((user?.role || "").toUpperCase())
                   ? "/profile"
-                  : getRoleDashboardPath(user?.role)
+                  : (user?.role || "").toUpperCase() === "WORKER"
+                    ? "/worker/profile"
+                    : getRoleDashboardPath(user?.role)
               }
               aria-label="Open profile"
               className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs hover:border-brand-saffron-300 hover:bg-brand-saffron-50 focus:outline-none focus:ring-2 focus:ring-brand-saffron-500"
             >
-              <div className="w-7 h-7 rounded-lg bg-brand-navy-900 text-white flex items-center justify-center font-bold">
-                <RoleIcon className="w-4 h-4 text-brand-saffron-400" />
+              <div className="w-7 h-7 overflow-hidden rounded-lg bg-brand-navy-900 text-white flex items-center justify-center font-bold">
+                {user?.profileImage || user?.avatar ? (
+                  <img
+                    src={user.profileImage || user.avatar}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <RoleIcon className="w-4 h-4 text-brand-saffron-400" />
+                )}
               </div>
               <div className="hidden sm:block text-left">
                 <p className="font-bold text-slate-900 leading-tight">

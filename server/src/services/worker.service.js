@@ -9,6 +9,16 @@ import mongoose from 'mongoose';
 // In-memory worker store for offline development and testing
 export const inMemoryWorkers = new Map();
 
+async function syncAccountProfileImage(userId, profileImage) {
+  if (mongoose.connection.readyState === 1) {
+    await User.findByIdAndUpdate(userId, { profileImage });
+    return;
+  }
+  const { inMemoryUsers } = await import('./auth.service.js');
+  const user = inMemoryUsers.get(String(userId));
+  if (user) user.profileImage = profileImage;
+}
+
 // Initialize realistic default worker for testing
 const defaultWorkerId = '65f123456789012345678902';
 inMemoryWorkers.set(defaultWorkerId, {
@@ -451,19 +461,33 @@ export class WorkerService {
     };
 
     inMemoryWorkers.set(cleanId, updatedRecord);
+    if (profileImage !== undefined) await syncAccountProfileImage(cleanId, profileImage);
     return updatedRecord;
   }
 
   /**
    * Update worker availability status
    */
-  static async updateAvailability(userId, { status, workingRadiusKm }) {
+  static async updateAvailability(userId, { status, workingRadiusKm, workingDays, hours }) {
     const cleanId = String(userId);
+    const allowedDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    if (workingDays && (!Array.isArray(workingDays) || workingDays.some(day => !allowedDays.includes(day)))) {
+      throw new AppError('Working days must contain valid weekdays', 400);
+    }
+    if (hours && ((hours.start && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hours.start)) || (hours.end && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hours.end)))) {
+      throw new AppError('Working hours must use 24-hour HH:MM values', 400);
+    }
+    if (workingRadiusKm !== undefined && (!Number.isInteger(Number(workingRadiusKm)) || Number(workingRadiusKm) < 1 || Number(workingRadiusKm) > 100)) {
+      throw new AppError('Working radius must be between 1 and 100 km', 400);
+    }
 
     if (mongoose.connection.readyState === 1) {
       const updateFields = {};
       if (status) updateFields['availability.status'] = status;
       if (workingRadiusKm) updateFields['location.workingRadiusKm'] = workingRadiusKm;
+      if (workingDays) updateFields['availability.workingDays'] = workingDays;
+      if (hours?.start) updateFields['availability.hours.start'] = hours.start;
+      if (hours?.end) updateFields['availability.hours.end'] = hours.end;
 
       const profile = await Worker.findOneAndUpdate(
         { $or: [{ user: cleanId }, { userId: cleanId }] },
@@ -477,6 +501,8 @@ export class WorkerService {
     const worker = await this.getProfile(cleanId);
     if (status) worker.availability.status = status;
     if (workingRadiusKm) worker.location.workingRadiusKm = workingRadiusKm;
+    if (workingDays) worker.availability.workingDays = workingDays;
+    if (hours) worker.availability.hours = { ...worker.availability.hours, ...hours };
     inMemoryWorkers.set(cleanId, worker);
     return worker;
   }
@@ -485,14 +511,44 @@ export class WorkerService {
    * Update editable worker profile fields: bio, phone, workingRadiusKm
    * Called by PATCH /api/v1/workers/profile
    */
-  static async updateProfile(userId, { bio, phone, workingRadiusKm }) {
+  static async updateProfile(userId, updates) {
     const cleanId = String(userId);
+    const { bio, phone, workingRadiusKm } = updates;
+    const allowedFields = [
+      'name', 'email', 'profileImage', 'profession', 'customProfession',
+      'skills', 'generatedDocuments',
+    ];
 
     if (mongoose.connection.readyState === 1) {
+      if (updates.profileImage !== undefined) {
+        await syncAccountProfileImage(cleanId, updates.profileImage);
+        if (profile.user && typeof profile.user === 'object') {
+          profile.user.profileImage = updates.profileImage;
+        }
+      }
       const updateFields = {};
 
       if (bio !== undefined) updateFields.bio = String(bio).trim().slice(0, 2000);
       if (phone !== undefined) updateFields.phone = String(phone).trim();
+      for (const field of allowedFields) {
+        if (updates[field] !== undefined) updateFields[field] = updates[field];
+      }
+      if (updates.address && typeof updates.address === 'object') {
+        for (const [key, value] of Object.entries(updates.address)) {
+          if (['line1', 'line2', 'pincode', 'district', 'state', 'city', 'latitude', 'longitude'].includes(key)) updateFields[`address.${key}`] = value;
+          if (key === 'line1') updateFields['location.address.street'] = value;
+          if (['pincode', 'state', 'city'].includes(key)) updateFields[`location.address.${key}`] = value;
+        }
+      }
+      if (updates.location?.address && typeof updates.location.address === 'object') {
+        for (const [key, value] of Object.entries(updates.location.address)) {
+          if (['street', 'city', 'state', 'pincode'].includes(key)) updateFields[`location.address.${key}`] = value;
+        }
+      }
+      if (updates.experience && typeof updates.experience === 'object') {
+        if (updates.experience.years !== undefined) updateFields['experience.years'] = updates.experience.years;
+        if (updates.experience.primaryTrade !== undefined) updateFields['experience.primaryTrade'] = updates.experience.primaryTrade;
+      }
       if (workingRadiusKm !== undefined) {
         const r = parseInt(workingRadiusKm, 10);
         if (isNaN(r) || r < 1 || r > 100) {
@@ -515,6 +571,20 @@ export class WorkerService {
     const worker = await this.getProfile(cleanId);
     if (bio !== undefined) worker.bio = String(bio).trim().slice(0, 2000);
     if (phone !== undefined) worker.phone = String(phone).trim();
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) worker[field] = updates[field];
+    }
+    if (updates.address) {
+      worker.address = { ...worker.address, ...updates.address };
+      worker.location ||= {};
+      worker.location.address = {
+        ...worker.location.address,
+        ...(updates.address.line1 !== undefined ? { street: updates.address.line1 } : {}),
+        ...(['city', 'state', 'pincode'].reduce((address, key) => updates.address[key] !== undefined ? { ...address, [key]: updates.address[key] } : address, {})),
+      };
+    }
+    if (updates.location?.address) worker.location.address = { ...worker.location.address, ...updates.location.address };
+    if (updates.experience) worker.experience = { ...worker.experience, ...updates.experience };
     if (workingRadiusKm !== undefined) {
       const r = parseInt(workingRadiusKm, 10);
       if (isNaN(r) || r < 1 || r > 100) {
@@ -524,12 +594,23 @@ export class WorkerService {
       worker.location.workingRadiusKm = r;
     }
     inMemoryWorkers.set(cleanId, worker);
+    if (updates.profileImage !== undefined) {
+      await syncAccountProfileImage(cleanId, updates.profileImage);
+    }
     return worker;
   }
 
 
   static async uploadDocument(userId, { docType, url, name }) {
     const cleanId = String(userId);
+    const normalizedType = String(docType || 'Identity Proof').toLowerCase();
+    const typedDocument = normalizedType.includes('aadhaar')
+      ? 'aadhaar'
+      : normalizedType.includes('address')
+        ? 'addressProof'
+        : normalizedType.includes('shram')
+          ? 'eshramCard'
+          : null;
     const newDoc = {
       docType: docType || 'Identity Proof',
       url: url || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600',
@@ -539,12 +620,21 @@ export class WorkerService {
     };
 
     if (mongoose.connection.readyState === 1) {
-      const profile = await Worker.findOneAndUpdate(
+      const profile = await Worker.findOne(
         { $or: [{ user: cleanId }, { userId: cleanId }] },
-        { $push: { 'verificationStatus.documents': newDoc } },
-        { new: true }
       );
-      return profile?.verificationStatus?.documents || [newDoc];
+      if (!profile) throw new AppError('Worker profile not found', 404);
+      profile.verificationStatus ||= { documents: [] };
+      profile.verificationStatus.documents = (profile.verificationStatus.documents || [])
+        .filter(document => String(document.docType).toLowerCase() !== normalizedType);
+      profile.verificationStatus.documents.push(newDoc);
+      if (typedDocument) {
+        profile.documents ||= {};
+        profile.documents[typedDocument] = { ...(profile.documents[typedDocument]?.toObject?.() || profile.documents[typedDocument] || {}), url: newDoc.url, name: newDoc.name, uploadedAt: newDoc.uploadedAt };
+        if (typedDocument === 'eshramCard') profile.eshramProvided = true;
+      }
+      await profile.save();
+      return profile.verificationStatus.documents;
     }
 
     const worker = await this.getProfile(cleanId);
@@ -552,6 +642,11 @@ export class WorkerService {
       worker.verificationStatus.documents = [];
     }
     worker.verificationStatus.documents.push(newDoc);
+    if (typedDocument) {
+      worker.documents ||= {};
+      worker.documents[typedDocument] = { ...worker.documents[typedDocument], url: newDoc.url, name: newDoc.name, uploadedAt: newDoc.uploadedAt };
+      if (typedDocument === 'eshramCard') worker.eshramProvided = true;
+    }
     inMemoryWorkers.set(cleanId, worker);
     return worker.verificationStatus.documents;
   }

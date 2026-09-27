@@ -32,6 +32,7 @@ router.patch(
         body('name').optional().trim().notEmpty().isLength({ max: 100 }),
         body('email').optional().trim().isEmail(),
         body('phone').optional().trim().notEmpty().isLength({ max: 30 }),
+        body('profileImage').optional({ nullable: true }).isString().isLength({ max: 7000000 }),
         body('preferences.language').optional().isIn(['en', 'hi']),
         validate,
     ],

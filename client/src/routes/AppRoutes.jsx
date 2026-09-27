@@ -21,6 +21,11 @@ const UserProfilePage = lazy(() =>
     default: module.UserProfilePage,
   })),
 );
+const WorkerProfilePage = lazy(() =>
+  import("../features/worker/WorkerProfilePage").then((module) => ({
+    default: module.WorkerProfilePage,
+  })),
+);
 
 function WorkerOnboardingPage() {
   const [loading, setLoading] = useState(true);
@@ -199,6 +204,25 @@ export function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["WORKER"]}>
             <WorkerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/worker/profile"
+        element={
+          <ProtectedRoute allowedRoles={["WORKER"]}>
+            <Suspense
+              fallback={
+                <div
+                  className="p-10 text-center text-sm text-slate-500"
+                  role="status"
+                >
+                  Loading profile…
+                </div>
+              }
+            >
+              <WorkerProfilePage />
+            </Suspense>
           </ProtectedRoute>
         }
       />

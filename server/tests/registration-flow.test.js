@@ -1,6 +1,6 @@
 import http from 'http';
 import app from '../src/app.js';
-import { AuthService } from '../src/services/auth.service.js';
+import { AuthService, inMemoryUsers } from '../src/services/auth.service.js';
 import { OtpService } from '../src/services/otp.service.js';
 import { PincodeService } from '../src/services/pincode.service.js';
 import { WorkerService } from '../src/services/worker.service.js';
@@ -94,6 +94,40 @@ async function runRegistrationFlowTests() {
   const initialStatus = await WorkerService.getRegistrationStatus(workerUserId);
   assert(initialStatus.registrationStatus === 'DRAFT', 'R10/R11: Worker profile initialized in DRAFT mode');
   assert(initialStatus.isLocked === false, 'R10: Registration form is not locked in DRAFT mode');
+
+  const editedWorker = await WorkerService.updateProfile(workerUserId, {
+    profileImage: 'data:image/png;base64,ZmFrZQ==',
+    address: { line1: '12 Market Road', pincode: '411001', district: 'Pune', state: 'Maharashtra', city: 'Pune' },
+    skills: [{ name: 'Solar wiring', experienceYears: 4, serviceRadiusKm: 18 }],
+    generatedDocuments: [{ type: 'work-history-statement', fileName: 'work-history.html', content: '<html>work record</html>', workerId: workerUserId }],
+  });
+  assert(editedWorker.profileImage.includes('data:image/png'), 'Profile edit saves worker photo');
+  assert(inMemoryUsers.get(workerUserId).profileImage === editedWorker.profileImage, 'Worker photo syncs to the account profile');
+  assert(editedWorker.location.address.street === '12 Market Road', 'Profile edit synchronizes service address');
+  assert(editedWorker.skills[0].serviceRadiusKm === 18, 'Profile edit saves per-skill service radius');
+  assert(editedWorker.generatedDocuments[0].fileName === 'work-history.html', 'Profile edit records generated work statement');
+  assert(editedWorker.generatedDocuments[0].content.includes('work record'), 'Profile keeps a downloadable work statement copy');
+
+  const updatedAvailability = await WorkerService.updateAvailability(workerUserId, {
+    status: 'busy',
+    workingDays: ['Monday', 'Wednesday'],
+    hours: { start: '08:30', end: '17:30' },
+  });
+  assert(updatedAvailability.availability.status === 'busy', 'Availability edit saves busy status');
+  assert(updatedAvailability.availability.workingDays.length === 2, 'Availability edit saves selected service days');
+  assert(updatedAvailability.availability.hours.start === '08:30', 'Availability edit saves working hours');
+
+  const uploadedDocuments = await WorkerService.uploadDocument(workerUserId, {
+    docType: 'Address Proof', url: 'data:application/pdf;base64,ZmFrZQ==', name: 'address.pdf',
+  });
+  const workerWithDocument = await WorkerService.getProfile(workerUserId);
+  assert(uploadedDocuments.some((document) => document.docType === 'Address Proof'), 'Document upload adds verification record');
+  assert(workerWithDocument.documents.addressProof.name === 'address.pdf', 'Document upload populates typed address proof');
+  assert(WorkerService.validateDocumentUpload({ originalname: 'address.pdf' }), 'Document validation accepts PDF uploads');
+  let invalidDocumentError = null;
+  try { WorkerService.validateDocumentUpload({ originalname: 'script.exe' }); } catch (err) { invalidDocumentError = err; }
+  assert(invalidDocumentError?.statusCode === 400, 'Document validation rejects unsupported extensions');
+  await WorkerService.updateAvailability(workerUserId, { status: 'available' });
 
   // ==========================================
   // REQUIREMENT 3: Indian Pincode & Reverse Geocoding

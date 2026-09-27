@@ -19,12 +19,19 @@ router.get('/profile', workerController.getProfile);
 router.patch(
   '/profile',
   [
+    body('name').optional().trim().isLength({ min: 1, max: 100 }).withMessage('Name must be 1 to 100 characters'),
+    body('email').optional().trim().isEmail().withMessage('Enter a valid email address'),
+    body('profileImage').optional({ nullable: true }).isString().isLength({ max: 7000000 }),
+    body('profession').optional().isString().isLength({ max: 100 }),
     body('bio').optional().isString().isLength({ max: 2000 }).withMessage('Bio must be 2000 characters or fewer'),
     body('phone').optional().trim(),
     body('workingRadiusKm')
       .optional()
       .isInt({ min: 1, max: 100 })
       .withMessage('Working radius must be an integer between 1 and 100 km'),
+    body('skills').optional().isArray().withMessage('Skills must be a list'),
+    body('address').optional().isObject().withMessage('Address must be an object'),
+    body('generatedDocuments').optional().isArray().withMessage('Generated documents must be a list'),
     validate,
   ],
   workerController.updateProfile
@@ -68,6 +75,8 @@ router.patch(
       .optional()
       .isInt({ min: 1, max: 100 })
       .withMessage('Radius must be an integer between 1 and 100 km'),
+    body('workingDays').optional().isArray().withMessage('Working days must be a list'),
+    body('hours').optional().isObject().withMessage('Working hours must be an object'),
     validate,
   ],
   workerController.updateAvailability

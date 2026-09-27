@@ -37,6 +37,17 @@ function safeProfile(user) {
   };
 }
 
+function normalizeProfileImage(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value.length > 7_000_000) {
+    throw new AppError('Profile photo must be 5 MB or smaller', 400);
+  }
+  if (!/^https?:\/\/\S+$/i.test(value) && !/^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(value)) {
+    throw new AppError('Profile photo must be a valid image', 400);
+  }
+  return value;
+}
+
 function normalizeAddress(input) {
   const label = String(input.label || '').trim();
   const street = String(input.street || '').trim();
@@ -85,6 +96,9 @@ export class UserService {
       ? await User.findById(userId)
       : inMemoryUsers.get(String(userId));
     if (!user) throw new AppError('User not found', 404);
+    const profileImage = updates.profileImage === undefined
+      ? undefined
+      : normalizeProfileImage(updates.profileImage);
 
     const email = updates.email === undefined ? undefined : String(updates.email).trim().toLowerCase();
     const phone = updates.phone === undefined ? undefined : String(updates.phone).trim();
@@ -104,6 +118,7 @@ export class UserService {
     }
 
     if (updates.name !== undefined) user.name = String(updates.name).trim();
+    if (profileImage !== undefined) user.profileImage = profileImage;
     if (phoneChanged) {
       user.phone = phone;
       user.phoneVerified = true;

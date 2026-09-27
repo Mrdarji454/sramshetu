@@ -7,6 +7,8 @@ const skillItemSchema = new mongoose.Schema(
     nsdcLevel: { type: String, trim: true },
     certifiedDate: { type: Date, default: null },
     certifiedBy: { type: String, trim: true },
+    experienceYears: { type: Number, min: 0, default: 0 },
+    serviceRadiusKm: { type: Number, min: 1, max: 100, default: 15 },
     isPrimary: { type: Boolean, default: false },
   },
   { _id: false }
@@ -224,6 +226,16 @@ const workerSchema = new mongoose.Schema(
         uploadedAt: { type: Date, default: null },
       },
     },
+
+    generatedDocuments: [{
+      type: { type: String, trim: true },
+      fileName: { type: String, trim: true },
+      content: { type: String },
+      generatedAt: { type: Date, default: Date.now },
+      jobsCompleted: { type: Number, min: 0 },
+      totalEarnings: { type: Number, min: 0 },
+      workerId: { type: String, trim: true },
+    }],
 
     eshramProvided: { type: Boolean, default: false },
     // `cooperative` is aliased as `cooperativeId` below; keep a single field definition to avoid Mongoose path conflicts.

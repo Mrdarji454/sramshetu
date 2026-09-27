@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   CalendarDays,
+  Camera,
   CheckCircle2,
   ChevronRight,
   CircleUserRound,
@@ -147,6 +148,7 @@ export function UserProfilePage() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState("all");
   const [expandedTransaction, setExpandedTransaction] = useState(null);
+  const photoInputRef = useRef(null);
 
   const loadProfile = async () => {
     const data = await profileService.getProfile();
@@ -232,6 +234,57 @@ export function UserProfilePage() {
       transactionFilter === "all" || item.paymentStatus === transactionFilter,
   );
   const savedAddresses = profile?.addresses || [];
+
+  const updateProfilePhoto = (file) => {
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const mimeByExtension = {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
+    };
+    const supportedTypes = Object.values(mimeByExtension);
+    const photoType = supportedTypes.includes(file.type)
+      ? file.type
+      : mimeByExtension[extension];
+    if (!photoType || file.size > 5 * 1024 * 1024) {
+      setError("Choose a JPG, PNG, WEBP, or GIF image smaller than 5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const previousImage = profile?.profileImage;
+      const nextImage = reader.result;
+      setProfile((previous) => ({ ...previous, profileImage: nextImage }));
+      updateUser?.({ profileImage: nextImage });
+      setSaving(true);
+      setError("");
+      try {
+        const updated = await profileService.updateProfile({
+          profileImage: nextImage,
+        });
+        setProfile((previous) => ({
+          ...previous,
+          profileImage: updated.profileImage,
+        }));
+        updateUser?.({ profileImage: updated.profileImage });
+        setNotice("Profile photo updated everywhere.");
+      } catch (photoError) {
+        setProfile((previous) => ({
+          ...previous,
+          profileImage: previousImage,
+        }));
+        updateUser?.({ profileImage: previousImage });
+        setError(photoError.message || "Unable to update profile photo.");
+      } finally {
+        setSaving(false);
+      }
+    };
+    reader.onerror = () => setError("Could not read that image.");
+    reader.readAsDataURL(file.slice(0, file.size, photoType));
+  };
 
   const savePersonalDetails = async (event) => {
     event.preventDefault();
@@ -619,6 +672,24 @@ export function UserProfilePage() {
                 </div>
               </div>
             </div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-brand-saffron-700"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={saving}
+            >
+              <Camera className="h-4 w-4" /> Change photo
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+              className="hidden"
+              onChange={(event) => {
+                updateProfilePhoto(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
             <Button
               variant="outline"
               size="sm"

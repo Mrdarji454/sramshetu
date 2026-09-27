@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 
 export function WorkerDashboard() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview"); // 'overview' or 'onboarding'
   const [profile, setProfile] = useState(null);
@@ -255,10 +255,12 @@ export function WorkerDashboard() {
         },
         bio: editData.bio,
         phone: editData.phone,
+        profileImage: editData.profileImage,
       };
 
       await workerService.updateProfile(updatePayload);
-      
+      updateUser?.({ profileImage: editData.profileImage });
+
       // Update local profile state
       setProfile((prev) => ({
         ...prev,
@@ -856,7 +858,9 @@ export function WorkerDashboard() {
                                 <div className="max-h-80 overflow-y-auto">
                                   <NavigationMap
                                     workerCoordinates={
-                                      profile?.location?.coordinates || [72.8479, 19.076]
+                                      profile?.location?.coordinates || [
+                                        72.8479, 19.076,
+                                      ]
                                     }
                                     customerCoordinates={
                                       job.location?.coordinates ||
@@ -864,7 +868,9 @@ export function WorkerDashboard() {
                                     }
                                     workerName={profile?.name || "You"}
                                     customerName={
-                                      job.customerName || job.customer?.name || "Customer"
+                                      job.customerName ||
+                                      job.customer?.name ||
+                                      "Customer"
                                     }
                                     interactive={true}
                                     showETA={true}
@@ -1157,7 +1163,10 @@ export function WorkerDashboard() {
             name: profile?.name || user?.name || "Worker",
             phone: profile?.phone || user?.phone || "",
             email: profile?.email || user?.email || "",
-            profession: profile?.profession || profile?.experience?.primaryTrade || "Skilled Artisan",
+            profession:
+              profile?.profession ||
+              profile?.experience?.primaryTrade ||
+              "Skilled Artisan",
             ...profile,
           }}
           onClose={() => setShowProfileModal(false)}

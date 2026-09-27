@@ -59,6 +59,16 @@ await test('Address operations cannot access another customer profile', async ()
     await assert.rejects(() => UserService.updateAddress(otherId, firstAddress.id, address('Intrusion')), { statusCode: 404 });
     assert.equal((await UserService.getProfile(ownerId)).addresses[0].street, '17 Lake Road');
 });
+await test('Customer profile photo updates persist in the shared account profile', async () => {
+    const image = 'data:image/png;base64,ZmFrZQ==';
+    const updated = await UserService.updateProfile(ownerId, { profileImage: image });
+    assert.equal(updated.profileImage, image);
+    assert.equal(inMemoryUsers.get(ownerId).profileImage, image);
+    await assert.rejects(
+        () => UserService.updateProfile(ownerId, { profileImage: 'data:text/html;base64,PHNjcmlwdD4=' }),
+        { statusCode: 400 },
+    );
+});
 await test('Phone changes require server-verified OTP', async () => {
     const newPhone = '+919876543219';
     await assert.rejects(() => UserService.updateProfile(ownerId, { phone: newPhone }), { statusCode: 403 });

@@ -9,6 +9,11 @@ export const workerService = {
     return response.data || response;
   },
 
+  async getPublicProfile(id) {
+    const response = await apiClient.get(`/workers/public/${id}`);
+    return response.data || response;
+  },
+
   /**
    * Get registration status & step progress
    */
@@ -44,8 +49,8 @@ export const workerService = {
   /**
    * Update availability status or radius
    */
-  async updateAvailability({ status, workingRadiusKm }) {
-    const response = await apiClient.patch('/workers/availability', { status, workingRadiusKm });
+  async updateAvailability({ status, workingRadiusKm, workingDays, hours }) {
+    const response = await apiClient.patch('/workers/availability', { status, workingRadiusKm, workingDays, hours });
     return response.data || response;
   },
 
