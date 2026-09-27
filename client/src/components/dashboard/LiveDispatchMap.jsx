@@ -347,9 +347,8 @@ export function LiveDispatchMap({
   return (
     <div className={className}>
       <div ref={mapContainerRef} className="w-full h-full" />
-      
-      {/* Map Floating Legend */}
-      <div className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-md px-3 py-2.5 rounded-xl border border-slate-200 shadow-md text-xs space-y-1.5 pointer-events-auto">
+
+      <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-md px-3 py-2.5 rounded-xl border border-slate-200 shadow-md text-xs space-y-1.5 pointer-events-none">
         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-1">
           Live Dispatch States
         </div>

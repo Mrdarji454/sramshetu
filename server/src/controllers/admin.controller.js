@@ -1,6 +1,7 @@
 import { AdminService } from '../services/admin.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
+import { getAdminZoneShiftRecommendations } from '../services/zoneShift.service.js';
 
 export const getSystemStats = asyncHandler(async (req, res) => {
   const stats = await AdminService.getSystemStats();
@@ -36,4 +37,9 @@ export const getLiveDispatch = asyncHandler(async (req, res) => {
 export const getComplaints = asyncHandler(async (req, res) => {
   const complaints = await AdminService.getComplaints();
   return successResponse(res, complaints, 'Grievance complaints retrieved', 200);
+});
+
+export const getZoneShiftRecommendations = asyncHandler(async (req, res) => {
+  const recommendations = await getAdminZoneShiftRecommendations();
+  return successResponse(res, recommendations, 'Zone shift recommendations retrieved', 200);
 });

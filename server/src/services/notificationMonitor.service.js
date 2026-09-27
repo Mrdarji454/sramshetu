@@ -1,6 +1,7 @@
 import { Booking } from '../models/Booking.model.js';
 import { Worker } from '../models/Worker.model.js';
 import { safelyNotify, notifyAdmins, notifyWorker } from './notification.service.js';
+import { generateZoneShiftRecommendations } from './zoneShift.service.js';
 
 export async function scanNotificationReminders(now = new Date()) {
   return safelyNotify(async () => {
@@ -28,6 +29,16 @@ export async function scanNotificationReminders(now = new Date()) {
       const available = await Worker.countDocuments({ 'availability.status': 'available', 'verificationStatus.status': 'verified', $or: [{ 'address.district': district._id }, { 'address.city': district._id }, { 'location.address.city': district._id }] });
       if (available === 0) await notifyAdmins({ type: 'WORKER_SHORTAGE', title: 'Worker shortage alert', message: `${district._id} has open bookings and no available verified workers.`, eventKey: `shortage:${district._id}:${day}` });
     }
+
+    const recommendations = await generateZoneShiftRecommendations(now);
+    if (recommendations.length > 0) {
+      await notifyAdmins({
+        type: 'ZONE_SHIFT_RECOMMENDATION',
+        title: 'Recommended zone reallocation',
+        message: `There are ${recommendations.length} zone shift opportunities based on active demand and worker availability.`,
+        eventKey: `zone-shift-summary:${now.toISOString().slice(0, 10)}`,
+      });
+    }
   });
 }
 
@@ -39,7 +50,7 @@ export function startNotificationMonitor() {
     try { await scanNotificationReminders(); } finally { running = false; }
   };
   void run();
-  const timer = setInterval(run, 15 * 60 * 1000);
+  const timer = setInterval(run, 2 * 60 * 60 * 1000);
   timer.unref();
   return () => clearInterval(timer);
 }

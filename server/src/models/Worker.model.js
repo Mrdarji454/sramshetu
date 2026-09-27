@@ -94,6 +94,26 @@ const workerSchema = new mongoose.Schema(
       city: { type: String, trim: true, default: 'Pune' },
       pincodes: [{ type: String, trim: true }],
     },
+    currentZone: {
+      type: String,
+      trim: true,
+      default: null,
+      index: true,
+    },
+    temporaryZone: {
+      type: String,
+      trim: true,
+      default: null,
+      index: true,
+    },
+    shiftStatus: {
+      type: String,
+      enum: ['NONE', 'PENDING', 'ACTIVE', 'DECLINED', 'EXPIRED'],
+      default: 'NONE',
+      index: true,
+    },
+    shiftAcceptedAt: { type: Date, default: null },
+    shiftExpiresAt: { type: Date, default: null },
     availability: {
       status: {
         type: String,

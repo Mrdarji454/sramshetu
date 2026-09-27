@@ -47,6 +47,11 @@ inMemoryWorkers.set(defaultWorkerId, {
   },
   latitude: 18.5074,
   longitude: 73.8058,
+  currentZone: 'Pune',
+  temporaryZone: 'Nashik',
+  shiftStatus: 'PENDING',
+  shiftAcceptedAt: null,
+  shiftExpiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
   serviceArea: {
     radiusKm: 15,
     city: 'Pune',
@@ -393,6 +398,11 @@ export class WorkerService {
       },
       latitude: lat,
       longitude: lng,
+      currentZone: 'Pune',
+      temporaryZone: 'Nashik',
+      shiftStatus: 'PENDING',
+      shiftAcceptedAt: null,
+      shiftExpiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
       serviceArea: {
         radiusKm: radius,
         city: address.city || 'Pune',

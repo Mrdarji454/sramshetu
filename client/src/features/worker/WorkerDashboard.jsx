@@ -60,14 +60,19 @@ export function WorkerDashboard() {
   const [completionModalJob, setCompletionModalJob] = useState(null);
   const [completionNote, setCompletionNote] = useState("");
 
+  // Zone Shift Offers
+  const [zoneShiftOffers, setZoneShiftOffers] = useState([]);
+  const [zoneShiftLoading, setZoneShiftLoading] = useState(false);
+
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [regData, profData, verData, jobsData] = await Promise.allSettled([
+      const [regData, profData, verData, jobsData, zoneShiftData] = await Promise.allSettled([
         workerService.getRegistrationStatus(),
         workerService.getProfile(),
         workerService.getVerificationStatus(),
         bookingService.getBookings({ role: "worker" }),
+        workerService.getZoneShiftOffers(),
       ]);
 
       if (regData.status === "fulfilled" && regData.value) {
@@ -105,6 +110,15 @@ export function WorkerDashboard() {
 
       if (jobsData.status === "fulfilled" && Array.isArray(jobsData.value)) {
         setAssignedJobs(jobsData.value);
+      }
+
+      if (zoneShiftData.status === "fulfilled") {
+        const nextOffers = Array.isArray(zoneShiftData.value)
+          ? zoneShiftData.value
+          : Array.isArray(zoneShiftData.value?.offers)
+            ? zoneShiftData.value.offers
+            : [];
+        setZoneShiftOffers(nextOffers);
       }
     } catch (err) {
       console.error("Error loading worker dashboard:", err);
@@ -279,6 +293,32 @@ export function WorkerDashboard() {
       throw new Error(err.message || "Failed to update profile");
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const handleZoneShiftDecision = async (decision) => {
+    try {
+      setZoneShiftLoading(true);
+      const result = await workerService.respondToZoneShift(decision);
+      const nextOffer = result?.offer || zoneShiftOffers[0];
+      setZoneShiftOffers((previous) =>
+        previous.filter(
+          (item) =>
+            (item?._id || item?.id || item?.workerId) !==
+            (nextOffer?._id || nextOffer?.id || nextOffer?.workerId),
+        ),
+      );
+      setActionSuccessMsg(
+        decision === "accept"
+          ? "Zone shift accepted. Your service zone has been updated."
+          : "Zone shift declined. You will remain in your current zone.",
+      );
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } catch (err) {
+      setActionSuccessMsg(err.message || "Unable to update your zone shift.");
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    } finally {
+      setZoneShiftLoading(false);
     }
   };
 
@@ -942,6 +982,50 @@ export function WorkerDashboard() {
               </div>
             )}
           </div>
+
+          {/* Zone Shift Offers - Actionable Cards */}
+          {zoneShiftOffers.length > 0 && (
+            <div className="mb-8 rounded-2xl border border-orange-200 bg-orange-50 p-5 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold uppercase tracking-[0.18em] text-orange-700">Zone shift</span>
+                    <Badge variant="saffron" size="sm">{zoneShiftOffers[0]?.priority || "High priority"}</Badge>
+                  </div>
+                  <h3 className="text-2xl font-extrabold text-slate-900">High demand in {zoneShiftOffers[0]?.suggestedZone || "your target area"}</h3>
+                  <p className="mt-2 text-sm text-slate-600">
+                    You are currently assigned to <strong>{zoneShiftOffers[0]?.currentZone || "your local zone"}</strong> and can be reassigned to <strong>{zoneShiftOffers[0]?.suggestedZone}</strong>.
+                    {zoneShiftOffers[0]?.distanceKm ? ` Distance: ${zoneShiftOffers[0].distanceKm} km.` : ""}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleZoneShiftDecision("accept")}
+                    disabled={zoneShiftLoading}
+                  >
+                    {zoneShiftLoading ? "Saving..." : "Accept"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleZoneShiftDecision("decline")}
+                    disabled={zoneShiftLoading}
+                  >
+                    Decline
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!zoneShiftOffers.length && (
+            <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="text-2xl font-extrabold text-slate-900">Zone shift opportunity</h3>
+              <p className="mt-2 text-sm text-slate-600">No active zone shift offers for your current skill set.</p>
+            </div>
+          )}
         </>
       )}
 

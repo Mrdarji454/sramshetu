@@ -72,6 +72,14 @@ export const cooperativeService = {
     const response = await apiClient.post('/cooperatives/assign-worker', { bookingId, workerId });
     return response.data || response;
   },
+
+  /**
+   * Get workers recommended for reassignment
+   */
+  async getZoneShiftSuggestions() {
+    const response = await apiClient.get('/cooperatives/zone-shift-suggestions');
+    return response.data || response;
+  },
 };
 
 export default cooperativeService;

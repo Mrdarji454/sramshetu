@@ -85,6 +85,22 @@ export const workerService = {
     const response = await apiClient.patch('/workers/profile', profileData);
     return response.data || response;
   },
+
+  /**
+   * Get pending shift offers for the current worker
+   */
+  async getZoneShiftOffers() {
+    const response = await apiClient.get('/workers/zone-shift-offers');
+    return response.data || response;
+  },
+
+  /**
+   * Accept or decline a zone shift offer
+   */
+  async respondToZoneShift(decision) {
+    const response = await apiClient.post('/workers/zone-shift/decision', { decision });
+    return response.data || response;
+  },
 };
 
 export default workerService;
