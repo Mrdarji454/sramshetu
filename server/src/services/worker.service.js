@@ -482,8 +482,52 @@ export class WorkerService {
   }
 
   /**
-   * Upload and attach a document
+   * Update editable worker profile fields: bio, phone, workingRadiusKm
+   * Called by PATCH /api/v1/workers/profile
    */
+  static async updateProfile(userId, { bio, phone, workingRadiusKm }) {
+    const cleanId = String(userId);
+
+    if (mongoose.connection.readyState === 1) {
+      const updateFields = {};
+
+      if (bio !== undefined) updateFields.bio = String(bio).trim().slice(0, 2000);
+      if (phone !== undefined) updateFields.phone = String(phone).trim();
+      if (workingRadiusKm !== undefined) {
+        const r = parseInt(workingRadiusKm, 10);
+        if (isNaN(r) || r < 1 || r > 100) {
+          throw new AppError('Working radius must be between 1 and 100 km', 400);
+        }
+        updateFields['location.workingRadiusKm'] = r;
+      }
+
+      const profile = await Worker.findOneAndUpdate(
+        { $or: [{ user: cleanId }, { userId: cleanId }] },
+        { $set: updateFields },
+        { new: true }
+      ).populate('user', 'name email');
+
+      if (!profile) throw new AppError('Worker profile not found', 404);
+      return profile;
+    }
+
+    // In-memory fallback (dev/test without MongoDB)
+    const worker = await this.getProfile(cleanId);
+    if (bio !== undefined) worker.bio = String(bio).trim().slice(0, 2000);
+    if (phone !== undefined) worker.phone = String(phone).trim();
+    if (workingRadiusKm !== undefined) {
+      const r = parseInt(workingRadiusKm, 10);
+      if (isNaN(r) || r < 1 || r > 100) {
+        throw new AppError('Working radius must be between 1 and 100 km', 400);
+      }
+      if (!worker.location) worker.location = {};
+      worker.location.workingRadiusKm = r;
+    }
+    inMemoryWorkers.set(cleanId, worker);
+    return worker;
+  }
+
+
   static async uploadDocument(userId, { docType, url, name }) {
     const cleanId = String(userId);
     const newDoc = {

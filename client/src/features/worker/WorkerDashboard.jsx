@@ -9,6 +9,9 @@ import { VerifiedDashboard } from "./VerifiedDashboard";
 import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
+import { JobProgressBar } from "../../components/dashboard/JobProgressBar";
+import { NavigationMap } from "../../components/common/NavigationMap";
+import { WorkerProfileModal } from "../../components/dashboard/WorkerProfileModal";
 import {
   HardHat,
   QrCode,
@@ -31,6 +34,7 @@ import {
   Check,
   X,
   MessageSquare,
+  User,
 } from "lucide-react";
 
 export function WorkerDashboard() {
@@ -44,6 +48,8 @@ export function WorkerDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [actionSuccessMsg, setActionSuccessMsg] = useState(null);
   const [isProcessingId, setIsProcessingId] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // OTP Verification Handshake Modal
   const [otpModalJob, setOtpModalJob] = useState(null);
@@ -238,6 +244,36 @@ export function WorkerDashboard() {
     }
   };
 
+  const handleSaveProfile = async (editData) => {
+    setIsSavingProfile(true);
+    try {
+      // Call API to update worker profile
+      const updatePayload = {
+        location: {
+          ...profile?.location,
+          workingRadiusKm: editData.workingRadiusKm,
+        },
+        bio: editData.bio,
+        phone: editData.phone,
+      };
+
+      await workerService.updateProfile(updatePayload);
+      
+      // Update local profile state
+      setProfile((prev) => ({
+        ...prev,
+        ...updatePayload,
+        location: updatePayload.location,
+      }));
+
+      return true;
+    } catch (err) {
+      throw new Error(err.message || "Failed to update profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   const isVerified = Boolean(
     verification?.isVerified ||
     profile?.isVerified ||
@@ -345,18 +381,35 @@ export function WorkerDashboard() {
           </button>
         </div>
 
-        {/* Verification Status Pill */}
-        {verification && (
-          <Badge
-            variant={
-              isVerified ? "verified" : isRejected ? "outline" : "saffron"
-            }
-            size="md"
-            dot
+        {/* Right Side: Profile Button + Status */}
+        <div className="flex items-center gap-3">
+          {/* Profile Button (Top Right) */}
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-brand-saffron-50 to-amber-50 border border-brand-saffron-200 hover:border-brand-saffron-400 hover:shadow-md transition-all group"
+            title="View and edit your profile"
           >
-            Status: {(verification.status || "PENDING").toUpperCase()}
-          </Badge>
-        )}
+            <div className="w-8 h-8 rounded-full bg-brand-saffron-200 flex items-center justify-center group-hover:bg-brand-saffron-300 transition">
+              <User className="w-4 h-4 text-brand-saffron-700" />
+            </div>
+            <span className="text-xs font-bold text-slate-700 hidden sm:inline">
+              Profile
+            </span>
+          </button>
+
+          {/* Verification Status Pill */}
+          {verification && (
+            <Badge
+              variant={
+                isVerified ? "verified" : isRejected ? "outline" : "saffron"
+              }
+              size="md"
+              dot
+            >
+              Status: {(verification.status || "PENDING").toUpperCase()}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Verification Attention Banner */}
@@ -652,6 +705,11 @@ export function WorkerDashboard() {
                         </div>
                       </div>
 
+                      {/* Progress Bar */}
+                      <div className="px-5 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                        <JobProgressBar status={status} />
+                      </div>
+
                       {/* Job Details Grid */}
                       <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
                         <div className="space-y-3">
@@ -785,7 +843,7 @@ export function WorkerDashboard() {
 
                             {/* PHASE 3: ON_THE_WAY -> Start Work with OTP Handshake */}
                             {isOnTheWay && (
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-[11px] text-indigo-950 font-medium flex items-center justify-between">
                                   <span>
                                     📍 You are en-route. Upon doorstep arrival,
@@ -793,6 +851,26 @@ export function WorkerDashboard() {
                                     code.
                                   </span>
                                 </div>
+
+                                {/* Navigation Map with ETA - Compact Version */}
+                                <div className="max-h-80 overflow-y-auto">
+                                  <NavigationMap
+                                    workerCoordinates={
+                                      profile?.location?.coordinates || [72.8479, 19.076]
+                                    }
+                                    customerCoordinates={
+                                      job.location?.coordinates ||
+                                      job.location?.serviceAddress?.coordinates
+                                    }
+                                    workerName={profile?.name || "You"}
+                                    customerName={
+                                      job.customerName || job.customer?.name || "Customer"
+                                    }
+                                    interactive={true}
+                                    showETA={true}
+                                  />
+                                </div>
+
                                 <Button
                                   variant="primary"
                                   size="md"
@@ -1070,6 +1148,22 @@ export function WorkerDashboard() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Worker Profile Modal */}
+      {showProfileModal && (
+        <WorkerProfileModal
+          profile={{
+            name: profile?.name || user?.name || "Worker",
+            phone: profile?.phone || user?.phone || "",
+            email: profile?.email || user?.email || "",
+            profession: profile?.profession || profile?.experience?.primaryTrade || "Skilled Artisan",
+            ...profile,
+          }}
+          onClose={() => setShowProfileModal(false)}
+          onSave={handleSaveProfile}
+          isLoading={isSavingProfile}
+        />
       )}
     </DashboardLayout>
   );

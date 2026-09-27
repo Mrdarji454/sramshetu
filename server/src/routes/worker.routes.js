@@ -15,6 +15,21 @@ router.use(authenticate, authorizeRoles('worker', 'admin'));
 // GET /api/v1/workers/profile
 router.get('/profile', workerController.getProfile);
 
+// PATCH /api/v1/workers/profile — update editable fields (bio, phone, workingRadiusKm)
+router.patch(
+  '/profile',
+  [
+    body('bio').optional().isString().isLength({ max: 2000 }).withMessage('Bio must be 2000 characters or fewer'),
+    body('phone').optional().trim(),
+    body('workingRadiusKm')
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage('Working radius must be an integer between 1 and 100 km'),
+    validate,
+  ],
+  workerController.updateProfile
+);
+
 // POST /api/v1/workers/onboarding & PUT /api/v1/workers/profile
 router.post(
   '/onboarding',

@@ -76,3 +76,14 @@ export const submitRegistration = asyncHandler(async (req, res) => {
   const result = await WorkerService.submitRegistration(userId);
   return successResponse(res, result, result.message, 200);
 });
+
+/**
+ * Update editable worker profile fields (bio, phone, workingRadiusKm)
+ * PATCH /api/v1/workers/profile
+ */
+export const updateProfile = asyncHandler(async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const { bio, phone, workingRadiusKm } = req.body;
+  const updated = await WorkerService.updateProfile(userId, { bio, phone, workingRadiusKm });
+  return successResponse(res, updated, 'Profile updated successfully', 200);
+});
