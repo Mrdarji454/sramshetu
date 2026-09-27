@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/common/Logo';
+import { NotificationBell } from '../components/common/NotificationBell';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { 
@@ -62,6 +63,7 @@ export function DashboardLayout({ title, subtitle, roleBadge, children }) {
           </div>
 
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <Link to="/">
               <Button variant="ghost" size="sm" icon={Home} className="hidden sm:inline-flex">
                 Marketplace

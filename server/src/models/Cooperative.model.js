@@ -101,7 +101,7 @@ const cooperativeSchema = new mongoose.Schema(
     ],
     verificationStatus: {
       type: String,
-      enum: ['verified', 'pending', 'pending_audit', 'flagged', 'suspended'],
+      enum: ['verified', 'rejected', 'pending', 'pending_audit', 'flagged', 'suspended'],
       default: 'pending',
       index: true,
     },

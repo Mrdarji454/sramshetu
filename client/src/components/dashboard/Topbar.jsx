@@ -1,7 +1,7 @@
+import { NotificationBell } from '../common/NotificationBell';
 import React, { useState } from 'react';
 import {
   Menu,
-  Bell,
   ChevronDown,
   ArrowRight,
   ShieldCheck,
@@ -26,10 +26,8 @@ export function Topbar({
   onSearchChange,
   onBackToHome,
   userProfile,
-  notificationCount = 3,
 }) {
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const roles = [
     {
@@ -63,30 +61,6 @@ export function Topbar({
   ];
 
   const currentRoleObj = roles.find((r) => r.id === role) || roles[0];
-
-  const notifications = [
-    {
-      id: 1,
-      title: 'Smart Escrow Safe Handshake',
-      desc: 'Worker checked in via dynamic QR. Payment locked safely.',
-      time: '10m ago',
-      type: 'success',
-    },
-    {
-      id: 2,
-      title: 'Direct DBT Settled',
-      desc: '₹950 transferred directly to bank account with 0% middleman cut.',
-      time: '1h ago',
-      type: 'info',
-    },
-    {
-      id: 3,
-      title: 'NSDC Skill Verification Update',
-      desc: 'New certification verified on Skill India portal.',
-      time: '3h ago',
-      type: 'alert',
-    },
-  ];
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200/90 shadow-sm">
@@ -145,7 +119,6 @@ export function Topbar({
               type="button"
               onClick={() => {
                 setRoleDropdownOpen(!roleDropdownOpen);
-                setNotificationsOpen(false);
               }}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 bg-slate-50/75 hover:bg-slate-100 transition-all text-xs font-semibold text-slate-800"
             >
@@ -201,53 +174,7 @@ export function Topbar({
             )}
           </div>
 
-          {/* Notifications Center */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setNotificationsOpen(!notificationsOpen);
-                setRoleDropdownOpen(false);
-              }}
-              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 relative transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell className="w-4 h-4" />
-              {notificationCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-saffron-500 ring-2 ring-white" />
-              )}
-            </button>
-
-            {notificationsOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200/90 z-50 animate-fadeIn">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-900">Notifications</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                      {notificationCount}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-400 font-medium">Clear all</span>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
-                  {notifications.map((n) => (
-                    <div key={n.id} className="p-3 hover:bg-slate-50 transition-colors">
-                      <div className="flex items-start gap-2.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-900">{n.title}</p>
-                          <p className="text-[11px] text-slate-500 mt-0.5">{n.desc}</p>
-                          <span className="text-[10px] text-slate-400 mt-1 block font-mono">
-                            {n.time}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <NotificationBell />
 
           {/* User Avatar */}
           {userProfile?.avatar ? (
@@ -266,4 +193,3 @@ export function Topbar({
     </header>
   );
 }
-

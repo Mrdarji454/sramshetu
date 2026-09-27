@@ -1,4 +1,5 @@
 import { publicBooking } from '../services/bookingVerification.service.js';
+import { safelyNotify, notifyAdmins, notifyCooperative } from '../services/notification.service.js';
 import { WorkerService } from '../services/worker.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
@@ -12,16 +13,21 @@ export const getProfile = asyncHandler(async (req, res) => {
 export const saveOnboarding = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const updated = await WorkerService.saveOnboarding(userId, req.body);
+  if (updated.cooperativeId || updated.cooperative) await safelyNotify(() => notifyCooperative(updated.cooperativeId || updated.cooperative, { type: 'WORKER_JOINED', title: 'New worker joined', message: 'A worker selected your cooperative during onboarding.', eventKey: `joined:${userId}:${updated.cooperativeId?._id || updated.cooperativeId || updated.cooperative?._id || updated.cooperative}` }));
+  await safelyNotify(() => notifyAdmins({ type: 'VERIFICATION_PENDING', title: 'Worker verification pending', message: 'A worker profile has been submitted for review.', eventKey: `worker-onboarding:${userId}` }));
   return successResponse(res, updated, 'Worker onboarding saved successfully', 200);
 });
 
 export const updateAvailability = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const { status, workingRadiusKm } = req.body;
+  const previous = await WorkerService.getProfile(userId);
+  const previousStatus = previous.availability?.status;
   const updated = await WorkerService.updateAvailability(userId, {
     status,
     workingRadiusKm,
   });
+  if (status && status !== 'available' && status !== previousStatus) await safelyNotify(() => notifyCooperative(updated.cooperativeId || updated.cooperative, { type: 'WORKER_UNAVAILABLE', title: 'Worker became unavailable', message: `${updated.name || 'A member worker'} is now ${status}.` }));
   return successResponse(res, updated, 'Availability updated successfully', 200);
 });
 
@@ -64,6 +70,7 @@ export const saveStep = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const { stepNumber } = req.params;
   const result = await WorkerService.saveStep(userId, stepNumber, req.body);
+  if (String(stepNumber) === '3' && req.body.cooperativeId) await safelyNotify(() => notifyCooperative(req.body.cooperativeId, { type: 'WORKER_JOINED', title: 'New worker joined', message: 'A worker selected your cooperative during registration.', eventKey: `joined:${userId}:${req.body.cooperativeId}` }));
   return successResponse(res, result, `Step ${stepNumber} saved successfully`, 200);
 });
 
@@ -74,6 +81,7 @@ export const saveStep = asyncHandler(async (req, res) => {
 export const submitRegistration = asyncHandler(async (req, res) => {
   const userId = req.user._id || req.user.id;
   const result = await WorkerService.submitRegistration(userId);
+  await safelyNotify(() => notifyAdmins({ type: 'VERIFICATION_PENDING', title: 'Worker verification pending', message: 'A worker registration is ready for review.' }));
   return successResponse(res, result, result.message, 200);
 });
 

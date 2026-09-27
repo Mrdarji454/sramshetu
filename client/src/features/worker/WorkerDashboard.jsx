@@ -190,10 +190,16 @@ export function WorkerDashboard() {
     }
   };
 
-  const handleOpenOtpModal = (job) => {
-    setOtpModalJob(job);
-    setEnteredOtp("");
-    setOtpError(null);
+  const handleOpenOtpModal = async (job) => {
+    setIsProcessingId(job.id || job._id);
+    try {
+      if (job.status?.toUpperCase() === 'ON_THE_WAY') await bookingService.updateStatus(job.id || job._id, 'ARRIVED');
+      setOtpModalJob({ ...job, status: 'ARRIVED' });
+      setEnteredOtp("");
+      setOtpError(null);
+      loadData();
+    } catch (error) { alert(error.message || 'Could not record arrival'); }
+    finally { setIsProcessingId(null); }
   };
 
   const handleVerifyOtpSubmit = async (e) => {
@@ -647,7 +653,7 @@ export function WorkerDashboard() {
                   const isProcessing = isProcessingId === jobId;
                   const isAssigned = status === "ASSIGNED";
                   const isAccepted = status === "ACCEPTED";
-                  const isOnTheWay = status === "ON_THE_WAY";
+                  const isOnTheWay = ["ON_THE_WAY", "ARRIVED"].includes(status);
                   const isInProgress = status === "IN_PROGRESS";
                   const isCompleted = status === "COMPLETED";
 

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { bookingNotification } from './notification.service.js';
 import mongoose from 'mongoose';
 import { Booking } from '../models/Booking.model.js';
 import { User } from '../models/User.model.js';
@@ -13,7 +14,8 @@ export const VALID_TRANSITIONS = {
   ASSIGNED: ['ACCEPTED', 'REJECTED', 'ASSIGNED', 'CANCELLED'],
   REJECTED: ['ASSIGNED', 'CANCELLED'],
   ACCEPTED: ['ON_THE_WAY', 'REJECTED', 'CANCELLED'],
-  ON_THE_WAY: ['IN_PROGRESS', 'CANCELLED'],
+  ON_THE_WAY: ['ARRIVED', 'IN_PROGRESS', 'CANCELLED'],
+  ARRIVED: ['IN_PROGRESS', 'CANCELLED'],
   IN_PROGRESS: ['COMPLETED', 'DISPUTED'],
   COMPLETED: [],
   CANCELLED: [],
@@ -211,7 +213,7 @@ export class BookingService {
     if (tgt === 'CANCELLED') {
       // Customer can cancel if pending, assigned, or accepted
       if (normRole === 'USER') {
-        if (!['PENDING', 'ASSIGNED', 'ACCEPTED'].includes(cur)) {
+        if (!['PENDING', 'ASSIGNED', 'ACCEPTED', 'REJECTED'].includes(cur)) {
           throw new AppError('Customer cannot cancel a booking once work is in progress or artisan is on the way', 400);
         }
       }
@@ -226,7 +228,7 @@ export class BookingService {
       }
     }
 
-    if (['ON_THE_WAY', 'IN_PROGRESS', 'COMPLETED'].includes(tgt)) {
+    if (['ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED'].includes(tgt)) {
       if (normRole !== 'WORKER' && normRole !== 'ADMIN') {
         throw new AppError(`Only the assigned worker can update job progress to ${tgt}`, 403);
       }
@@ -405,6 +407,7 @@ export class BookingService {
         serviceAddress: {
           street: location.serviceAddress.street,
           city: location.serviceAddress.city,
+          district: location.serviceAddress.district || location.serviceAddress.city,
           state: location.serviceAddress.state || 'Maharashtra',
           pincode: location.serviceAddress.pincode || '',
           landmark: location.serviceAddress.landmark || '',
@@ -460,6 +463,9 @@ export class BookingService {
     // Save in MongoDB if connected
     if (mongoose.connection.readyState === 1) {
       const newBooking = await Booking.create(bookingPayload);
+      await bookingNotification(newBooking, 'BOOKING_SUBMITTED');
+      await bookingNotification(newBooking, 'NEW_BOOKING');
+      if (isDirectWorkerBooking || assignedCoopId) await bookingNotification(newBooking, isDirectWorkerBooking ? 'ASSIGNED' : 'COOPERATIVE_ASSIGNED');
       return newBooking;
     }
 
@@ -633,7 +639,13 @@ export class BookingService {
           allowed = [...inMemoryWorkers.values()].some(w => ref(w.user || w.userId) === actor && ref(w._id || w.id) === ref(booking.worker));
         }
       }
-      if (normalizeRole(role) === 'COOPERATIVE') allowed = ref(booking.cooperative) === actor || ref(booking.cooperativeId) === actor;
+      if (normalizeRole(role) === 'COOPERATIVE') {
+        allowed = ref(booking.cooperative) === actor || ref(booking.cooperativeId) === actor;
+        if (!allowed && mongoose.connection.readyState === 1) {
+          const manager = await User.findById(actor).select('cooperativeId');
+          allowed = Boolean(manager?.cooperativeId && ref(manager.cooperativeId) === ref(booking.cooperative));
+        }
+      }
       if (!allowed) throw new AppError('You do not have access to this booking', 403);
     }
     return booking;
@@ -722,6 +734,7 @@ export class BookingService {
         { new: true }
       );
       if (!updated) throw new AppError('Booking changed; refresh before retrying', 409);
+      await bookingNotification(updated, 'ASSIGNED');
       return updated;
     }
 
@@ -747,10 +760,12 @@ export class BookingService {
   /**
    * Update booking status with state machine verification
    */
-  static async updateBookingStatus(bookingId, newStatus, userId, role, { note = '', rejectionReason = null } = {}) {
+  static async updateBookingStatus(bookingId, newStatus, userId, role, { note = '', rejectionReason = null, scheduledTime } = {}) {
     const booking = await this.getBookingById(bookingId, userId, role);
+    if (scheduledTime) return this.rescheduleBooking(booking, scheduledTime, userId, role);
     const currentStatus = normalizeStatus(booking.status);
     const targetStatus = normalizeStatus(newStatus);
+    if (currentStatus === targetStatus) return booking;
 
     if (['IN_PROGRESS', 'COMPLETED'].includes(targetStatus)) throw new AppError('Use customer OTP verification to start or complete work', 403);
 
@@ -801,6 +816,7 @@ export class BookingService {
         { new: true }
       );
       if (!updated) throw new AppError('Booking changed; refresh before retrying', 409);
+      await bookingNotification(updated, targetStatus);
       return updated;
     }
 
@@ -820,6 +836,24 @@ export class BookingService {
   /**
    * Worker accepts assignment (ASSIGNED -> ACCEPTED)
    */
+  static async rescheduleBooking(booking, scheduledTime, actor, role) {
+    if (!['USER', 'ADMIN'].includes(normalizeRole(role))) throw new AppError('Only the customer or administrator may reschedule', 403);
+    if (!['PENDING', 'ASSIGNED', 'ACCEPTED', 'REJECTED'].includes(normalizeStatus(booking.status))) throw new AppError('This booking can no longer be rescheduled', 409);
+    const start = new Date(scheduledTime.start);
+    const end = new Date(scheduledTime.end || start.getTime() + 7200000);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start <= new Date() || end <= start) throw new AppError('Provide a valid future booking time', 400);
+    const entry = { status: booking.status, updatedBy: actor, role: normalizeRole(role), timestamp: new Date(), note: 'Customer rescheduled booking' };
+    if (mongoose.connection.readyState === 1) {
+      const updated = await Booking.findOneAndUpdate({ _id: booking._id, status: booking.status, 'scheduledTime.start': booking.scheduledTime.start }, { $set: { scheduledTime: { start, end } }, $push: { statusHistory: entry, timelineEvents: entry } }, { new: true });
+      if (!updated) throw new AppError('Booking changed; refresh before retrying', 409);
+      await bookingNotification(updated, 'RESCHEDULED');
+      return updated;
+    }
+    booking.scheduledTime = { start, end };
+    (booking.statusHistory ||= []).push(entry);
+    return booking;
+  }
+
   static async acceptBooking(bookingId, workerUserId) {
     return this.updateBookingStatus(bookingId, 'ACCEPTED', workerUserId, 'WORKER', {
       note: 'Artisan accepted assignment and confirmed time slot',

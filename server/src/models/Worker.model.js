@@ -208,17 +208,20 @@ const workerSchema = new mongoose.Schema(
 
     documents: {
       aadhaar: {
+        expiresAt: { type: Date, default: null },
         url: { type: String, default: null },
         name: { type: String, default: null },
         uploadedAt: { type: Date, default: null },
       },
       addressProof: {
+        expiresAt: { type: Date, default: null },
         docType: { type: String, default: 'Electricity Bill' },
         url: { type: String, default: null },
         name: { type: String, default: null },
         uploadedAt: { type: Date, default: null },
       },
       eshramCard: {
+        expiresAt: { type: Date, default: null },
         url: { type: String, default: null },
         name: { type: String, default: null },
         uploadedAt: { type: Date, default: null },

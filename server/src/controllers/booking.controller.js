@@ -78,6 +78,7 @@ export const updateStatus = asyncHandler(async (req, res) => {
   const updated = await BookingService.updateBookingStatus(id, status, userId, role, {
     note,
     rejectionReason,
+    scheduledTime: req.body.scheduledTime,
   });
 
   return successResponse(res, publicBooking(updated), `Booking status updated to ${status}`, 200);

@@ -1,4 +1,5 @@
 import { publicBooking } from '../services/bookingVerification.service.js';
+import { safelyNotify, notifyAdmins, notifyCooperative } from '../services/notification.service.js';
 import { CooperativeService } from '../services/cooperative.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
@@ -12,6 +13,7 @@ export const getProfile = asyncHandler(async (req, res) => {
 export const saveOnboarding = asyncHandler(async (req, res) => {
   const userId = req.user.cooperativeId || req.user._id || req.user.id;
   const updated = await CooperativeService.saveOnboarding(userId, req.body);
+  await safelyNotify(() => notifyAdmins({ type: 'VERIFICATION_PENDING', title: 'Cooperative verification pending', message: 'A cooperative profile has been submitted for review.', eventKey: `cooperative-onboarding:${updated._id}` }));
   return successResponse(res, updated, 'Cooperative onboarding saved successfully', 200);
 });
 
@@ -35,6 +37,7 @@ export const getMembers = asyncHandler(async (req, res) => {
 export const addMember = asyncHandler(async (req, res) => {
   const cooperativeId = req.user.cooperativeId || req.user._id || req.user.id;
   const member = await CooperativeService.addMember(cooperativeId, req.body);
+  await safelyNotify(() => notifyCooperative(cooperativeId, { type: 'WORKER_JOINED', title: 'New worker joined', message: `${member.name || 'A worker'} joined your cooperative.`, eventKey: `member:${cooperativeId}:${member._id || member.id}` }));
   return successResponse(res, member, 'Member artisan enrolled successfully', 201);
 });
 

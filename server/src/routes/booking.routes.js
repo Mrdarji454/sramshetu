@@ -53,7 +53,7 @@ router.patch(
 router.patch(
   '/:id/status',
   [
-    body('status').notEmpty().withMessage('Target status is required'),
+    body('status').custom((value, { req }) => Boolean(value || req.body.scheduledTime)).withMessage('Target status or scheduledTime is required'),
     validate,
   ],
   bookingController.updateStatus

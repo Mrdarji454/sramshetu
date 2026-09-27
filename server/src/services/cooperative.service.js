@@ -520,12 +520,18 @@ export class CooperativeService {
     };
 
     if (mongoose.connection.readyState === 1) {
-      const coop = await Cooperative.findByIdAndUpdate(
-        cleanId,
-        { $push: { members: newMember.id } },
-        { new: true }
-      );
-      return newMember;
+      // Persist real Worker references; the legacy demo W-MBR IDs are not ObjectIds.
+      const account = await User.findOne({ phone: memberData.phone, role: { $in: ['WORKER', 'worker'] } });
+      if (!account) throw new AppError('Worker must register with this phone number before joining', 404);
+      const profile = await Worker.findOne({ user: account._id });
+      if (!profile) throw new AppError('Worker profile not found', 404);
+      if (profile.cooperative && String(profile.cooperative) !== cleanId) throw new AppError('Worker already belongs to another cooperative', 409);
+      const coop = await Cooperative.findById(cleanId);
+      if (!coop) throw new AppError('Cooperative not found', 404);
+      const updated = await Worker.findOneAndUpdate({ _id: profile._id, cooperative: profile.cooperative || null }, { $set: { cooperative: coop._id } }, { new: true });
+      if (!updated) throw new AppError('Worker membership changed; refresh and retry', 409);
+      await Cooperative.updateOne({ _id: coop._id }, { $addToSet: { members: profile._id } });
+      return { ...newMember, id: String(profile._id), _id: profile._id, name: account.name, phone: account.phone };
     }
 
     const coop = await this.getProfile(cleanId);
