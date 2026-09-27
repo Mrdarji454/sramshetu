@@ -38,7 +38,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
  * @access  Public
  */
 export const register = asyncHandler(async (req, res) => {
-  const { name, phone, email, password, role, phoneVerified } = req.body;
+  const { name, phone, email, password, role } = req.body;
 
   // Requirement 2: Email is compulsory
   if (!email || !email.trim()) {
@@ -49,7 +49,7 @@ export const register = asyncHandler(async (req, res) => {
   const normalizedRole = (role || 'USER').toUpperCase();
   const requiresOtp = ['USER', 'CUSTOMER', 'WORKER'].includes(normalizedRole);
 
-  const isVerified = OtpService.isPhoneVerified(phone) || phoneVerified === true;
+  const isVerified = OtpService.isPhoneVerified(phone);
   if (requiresOtp && !isVerified) {
     throw new AppError('Mobile number must be verified via OTP before registration can be completed.', 400);
   }

@@ -5,7 +5,7 @@ import { config } from '../config/env.js';
 import { AppError } from '../utils/AppError.js';
 import mongoose from 'mongoose';
 
-const inMemoryUsers = new Map();
+export const inMemoryUsers = new Map();
 
 export class AuthService {
   /**

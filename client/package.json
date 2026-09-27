@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node tests/unit/profile-address.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

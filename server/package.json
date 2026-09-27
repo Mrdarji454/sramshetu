@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js && node tests/registration-flow.test.js && node tests/booking-flow.test.js && node tests/phase13-ai.test.js && node tests/user-portal.test.js",
+    "test": "node tests/unit.test.js && node tests/schemas.test.js && node tests/auth.test.js && node tests/registration-flow.test.js && node tests/booking-flow.test.js && node tests/phase13-ai.test.js && node tests/user-portal.test.js && node tests/profile-vault.test.js",
     "test:ai": "node tests/phase13-ai.test.js",
     "test:booking": "node tests/booking-flow.test.js",
     "test:auth": "node tests/auth.test.js",
@@ -23,6 +23,7 @@
     "express": "^4.21.2",
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5"
+    "mongoose": "^8.9.5",
+    "nodemailer": "^10.0.10"
   }
 }

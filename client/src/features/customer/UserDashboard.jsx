@@ -24,7 +24,27 @@ import {
   X,
   Compass,
   Layers,
+  CheckCircle2,
+  MessageSquare,
+  RotateCcw,
 } from "lucide-react";
+
+function getWorkerFeedback(booking) {
+  const feedback =
+    booking.workerFeedback ||
+    booking.feedbackFromWorker ||
+    booking.workerReview;
+  if (typeof feedback === "string") {
+    return feedback.trim() ? { text: feedback.trim() } : null;
+  }
+  if (!feedback || typeof feedback !== "object") return null;
+
+  const text = feedback.feedback || feedback.comment || feedback.message || "";
+  const rating = Number(feedback.rating) || 0;
+  return text.trim() || rating
+    ? { text: text.trim(), rating, createdAt: feedback.createdAt }
+    : null;
+}
 
 export function UserDashboard() {
   const { user } = useAuth();
@@ -46,12 +66,21 @@ export function UserDashboard() {
   const [selectedBookingForQr, setSelectedBookingForQr] = useState(null);
   const [expandedBookingId, setExpandedBookingId] = useState(null);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
+  const initialBookingView = searchParams.get("view");
+  const [bookingView, setBookingView] = useState(
+    ["active", "completed", "feedback"].includes(initialBookingView)
+      ? initialBookingView
+      : "active",
+  );
 
   // Sync tab change if searchParams change
   useEffect(() => {
     if (searchParams.get("tab")) {
       setActiveTab(searchParams.get("tab"));
     }
+    const view = searchParams.get("view");
+    if (["active", "completed", "feedback"].includes(view))
+      setBookingView(view);
   }, [searchParams]);
 
   const loadBookings = async () => {
@@ -81,7 +110,12 @@ export function UserDashboard() {
   useEffect(() => {
     loadBookings();
     const timer = setInterval(async () => {
-      try { const data = await bookingService.getBookings(); if (Array.isArray(data)) setBookings(data); } catch { /* Retain current bookings on transient failures. */ }
+      try {
+        const data = await bookingService.getBookings();
+        if (Array.isArray(data)) setBookings(data);
+      } catch {
+        /* Retain current bookings on transient failures. */
+      }
     }, 10000);
     return () => clearInterval(timer);
   }, []);
@@ -153,10 +187,86 @@ export function UserDashboard() {
   const activeCount = bookings.filter(
     (b) => !["COMPLETED", "CANCELLED"].includes((b.status || "").toUpperCase()),
   ).length;
-  const escrowHeld = bookings
+  const escrowRecorded = bookings
     .filter((b) => ["held", "escrow_locked"].includes(b.paymentStatus))
     .reduce((sum, b) => sum + (b.price?.totalAmount || b.escrowAmount || 0), 0);
-  const savings = Math.round(escrowHeld * 0.3); // 30% aggregator fee cut avoided
+  const paymentRecordCount = bookings.filter((b) =>
+    Boolean(b.paymentStatus),
+  ).length;
+  const completedBookings = bookings.filter(
+    (booking) => (booking.status || "").toUpperCase() === "COMPLETED",
+  );
+  const activeBookings = bookings.filter(
+    (booking) =>
+      !["COMPLETED", "CANCELLED"].includes(
+        (booking.status || "").toUpperCase(),
+      ),
+  );
+  const feedbackBookings = completedBookings.filter((booking) =>
+    getWorkerFeedback(booking),
+  );
+  const visibleBookings =
+    bookingView === "active"
+      ? activeBookings
+      : bookingView === "feedback"
+        ? feedbackBookings
+        : completedBookings;
+
+  const handleRebookWorker = (booking) => {
+    const workerRecord =
+      booking.worker && typeof booking.worker === "object"
+        ? booking.worker
+        : {};
+    const workerId =
+      workerRecord.id ||
+      workerRecord._id ||
+      booking.workerId ||
+      (typeof booking.worker === "string" ? booking.worker : null);
+    const workerName = booking.workerName || workerRecord.name;
+    const trade = booking.trade || booking.serviceName || "Skilled Service";
+    const cooperative =
+      booking.cooperative && typeof booking.cooperative === "object"
+        ? booking.cooperative
+        : {};
+    const cooperativeName =
+      booking.cooperativeName || cooperative.name || "Independent artisan";
+    const worker = {
+      ...workerRecord,
+      id: workerId,
+      _id: workerId,
+      name: workerName,
+      trade,
+    };
+    setInitialBookingService({
+      name: trade,
+      trade,
+      category: trade,
+      preferredWorker: worker,
+      preferredWorkerId: workerId,
+      preferredWorkerName: workerName,
+      preferredCooperative: cooperative.name ? cooperative : null,
+      preferredCooperativeId: cooperative.id || cooperative._id || null,
+      preferredCooperativeName: cooperativeName,
+      estimatedPrice: {
+        floorRate: worker.rates?.hourlyRate || worker.rates?.floorRate || 450,
+      },
+    });
+    setBookingModalOpen(true);
+  };
+
+  const handleOpenWorkerProfile = (booking) => {
+    const workerId =
+      booking.worker?.id ||
+      booking.worker?._id ||
+      booking.workerId ||
+      (typeof booking.worker === "string" ? booking.worker : null);
+    if (!workerId) return;
+
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", "match");
+    params.set("viewWorker", workerId);
+    setSearchParams(params);
+  };
 
   return (
     <DashboardLayout
@@ -202,34 +312,34 @@ export function UserDashboard() {
         <Card className="p-5 bg-white border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Escrow Protected
+              Booking Amount in Recorded Escrow States
             </span>
             <Badge variant="verified" size="sm">
-              100% Secure
+              Server-recorded
             </Badge>
           </div>
           <div className="text-2xl font-extrabold text-brand-navy-900 font-display">
-            ₹{escrowHeld.toLocaleString()}
+            ₹{escrowRecorded.toLocaleString()}
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Held funds release after completion OTP verification
+            Booking payment state only; no provider confirmation is available.
           </p>
         </Card>
 
         <Card className="p-5 bg-white border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Middleman Cuts Saved
+              Booking Payment Records
             </span>
             <Badge variant="gov" size="sm">
-              0% Platform Cut
+              Server-recorded
             </Badge>
           </div>
           <div className="text-2xl font-extrabold text-emerald-600 font-display">
-            ₹{savings.toLocaleString()}
+            {paymentRecordCount}
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Saved versus 25-35% private gig platform fees
+            Number of bookings with a recorded payment status
           </p>
         </Card>
       </div>
@@ -344,6 +454,62 @@ export function UserDashboard() {
               </div>
             </div>
 
+            <div
+              className="flex gap-2 overflow-x-auto border-b border-slate-100 px-5 sm:px-6 py-3"
+              role="group"
+              aria-label="Filter bookings"
+            >
+              {[
+                {
+                  id: "active",
+                  label: "Active tasks",
+                  count: activeBookings.length,
+                  icon: Clock,
+                },
+                {
+                  id: "completed",
+                  label: "Completed",
+                  count: completedBookings.length,
+                  icon: CheckCircle2,
+                },
+                {
+                  id: "feedback",
+                  label: "Feedback",
+                  count: feedbackBookings.length,
+                  icon: MessageSquare,
+                },
+              ].map((view) => {
+                const ViewIcon = view.icon;
+                const selected = bookingView === view.id;
+                return (
+                  <button
+                    key={view.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setBookingView(view.id);
+                      const params = new URLSearchParams(searchParams);
+                      params.set("view", view.id);
+                      setSearchParams(params);
+                    }}
+                    className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                      selected
+                        ? "border-brand-navy-900 bg-brand-navy-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <ViewIcon className="h-4 w-4" />
+                    {view.label}
+                    <span
+                      className={selected ? "text-slate-300" : "text-slate-400"}
+                    >
+                      {view.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             {bookings.length === 0 ? (
               <div className="p-12 text-center text-slate-400 space-y-3">
                 <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
@@ -365,13 +531,91 @@ export function UserDashboard() {
                   Create Your First Booking
                 </Button>
               </div>
+            ) : visibleBookings.length === 0 ? (
+              <div className="p-10 text-center text-sm text-slate-500">
+                {bookingView === "active"
+                  ? "You have no active tasks right now."
+                  : bookingView === "feedback"
+                    ? "No feedback from your artisans yet."
+                    : "Your completed bookings will appear here."}
+              </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {bookings.map((b) => {
+                {visibleBookings.map((b) => {
                   const bookingId = b.id || b._id;
                   const isExpanded = expandedBookingId === bookingId;
                   const status = (b.status || "PENDING").toUpperCase();
                   const isCompleted = status === "COMPLETED";
+                  const workerName = b.workerName || b.worker?.name;
+                  const workerId =
+                    b.worker?.id ||
+                    b.worker?._id ||
+                    b.workerId ||
+                    (typeof b.worker === "string" ? b.worker : null);
+                  const workerFeedback = getWorkerFeedback(b);
+                  const recordedPaymentStatus = String(
+                    b.paymentStatus || "",
+                  ).toLowerCase();
+                  const paymentLabel =
+                    {
+                      pending: "Payment pending (recorded)",
+                      held: "Escrow state recorded",
+                      escrow_locked: "Escrow state recorded",
+                      released: "Settlement state recorded",
+                      refunded: "Refund state recorded",
+                      failed: "Payment failure recorded",
+                      disputed: "Payment dispute recorded",
+                    }[recordedPaymentStatus] || "No payment status recorded";
+                  const bookingAmount = b.price?.totalAmount ?? b.escrowAmount;
+
+                  if (bookingView === "feedback") {
+                    return (
+                      <div
+                        key={bookingId}
+                        className="flex flex-col gap-2 p-5 sm:px-6"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          {workerName && workerId ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenWorkerProfile(b)}
+                              className="font-bold text-brand-navy-900 underline decoration-slate-300 underline-offset-2 hover:text-brand-saffron-700"
+                            >
+                              {workerName}
+                            </button>
+                          ) : (
+                            <span className="font-bold text-slate-900">
+                              {workerName || "Artisan"}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500">
+                            on {b.serviceName || b.trade || "completed service"}
+                          </span>
+                          {workerFeedback.rating > 0 && (
+                            <span className="text-xs font-semibold text-amber-700">
+                              {workerFeedback.rating}/5
+                            </span>
+                          )}
+                        </div>
+                        {workerFeedback.text && (
+                          <p className="text-sm text-slate-700">
+                            {workerFeedback.text}
+                          </p>
+                        )}
+                        {workerFeedback.createdAt && (
+                          <time className="text-xs text-slate-400">
+                            {new Date(
+                              workerFeedback.createdAt,
+                            ).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </time>
+                        )}
+                      </div>
+                    );
+                  }
 
                   return (
                     <div
@@ -406,11 +650,20 @@ export function UserDashboard() {
 
                           <p className="text-xs text-slate-600">
                             Assigned Artisan:{" "}
-                            <strong className="text-slate-800">
-                              {b.workerName ||
-                                b.worker?.name ||
-                                "Awaiting cooperative assignment"}
-                            </strong>{" "}
+                            {workerName && workerId ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWorkerProfile(b)}
+                                className="font-bold text-brand-navy-900 underline decoration-slate-300 underline-offset-2 hover:text-brand-saffron-700"
+                              >
+                                {workerName}
+                              </button>
+                            ) : (
+                              <strong className="text-slate-800">
+                                {workerName ||
+                                  "Awaiting cooperative assignment"}
+                              </strong>
+                            )}{" "}
                             • Society:{" "}
                             {b.cooperativeName ||
                               b.cooperative?.name ||
@@ -441,16 +694,26 @@ export function UserDashboard() {
                         <div className="flex items-center gap-4 justify-between lg:justify-end">
                           <div className="text-right">
                             <span className="text-sm font-bold text-slate-900 block">
-                              ₹{b.price?.totalAmount || b.escrowAmount || 900}
+                              {bookingAmount == null
+                                ? "Amount unavailable"
+                                : `₹${Number(bookingAmount).toLocaleString()}`}
                             </span>
                             <span className="text-[11px] text-emerald-700 font-semibold">
-                              {isCompleted
-                                ? "DBT Settlement Paid"
-                                : "Escrow Secured"}
+                              {paymentLabel}
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2">
+                            {bookingView === "completed" && workerId && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={RotateCcw}
+                                onClick={() => handleRebookWorker(b)}
+                              >
+                                Rebook artisan
+                              </Button>
+                            )}
                             {b.qrVerification?.otpCode && (
                               <Button
                                 variant="outline"
@@ -472,7 +735,11 @@ export function UserDashboard() {
                                 )
                               }
                             >
-                              {isExpanded ? "Hide Tracker" : "Track Status"}
+                              {isExpanded
+                                ? "Hide Details"
+                                : bookingView === "feedback"
+                                  ? "Open Feedback"
+                                  : "Track Status"}
                             </Button>
                           </div>
                         </div>
@@ -507,8 +774,6 @@ export function UserDashboard() {
         }}
         onBookingCreated={handleBookingCreated}
       />
-
-
     </DashboardLayout>
   );
 }

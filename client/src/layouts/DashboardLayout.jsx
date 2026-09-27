@@ -1,19 +1,19 @@
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
-import { Logo } from '../components/common/Logo';
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { 
-  LogOut, 
-  Home, 
-  User as UserIcon, 
-  ShieldCheck, 
+import React from "react";
+import { getRoleDashboardPath, useAuth } from "../context/AuthContext";
+import { Logo } from "../components/common/Logo";
+import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import {
+  LogOut,
+  Home,
+  User as UserIcon,
+  ShieldCheck,
   Bell,
   HardHat,
   Building2,
-  Lock
-} from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+  Lock,
+} from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
 export function DashboardLayout({ title, subtitle, roleBadge, children }) {
   const { user, logout } = useAuth();
@@ -21,19 +21,19 @@ export function DashboardLayout({ title, subtitle, roleBadge, children }) {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   const getRoleIcon = () => {
-    switch ((user?.role || '').toUpperCase()) {
-      case 'COOPERATIVE':
+    switch ((user?.role || "").toUpperCase()) {
+      case "COOPERATIVE":
         return Building2;
-      case 'WORKER':
+      case "WORKER":
         return HardHat;
-      case 'ADMIN':
+      case "ADMIN":
         return Lock;
-      case 'USER':
-      case 'CUSTOMER':
+      case "USER":
+      case "CUSTOMER":
       default:
         return UserIcon;
     }
@@ -56,28 +56,45 @@ export function DashboardLayout({ title, subtitle, roleBadge, children }) {
             <span className="hidden md:inline-block h-5 w-px bg-slate-200" />
             <div className="hidden md:flex items-center gap-2">
               <Badge variant="gov" size="sm">
-                Portal: {(user?.role || 'USER').toUpperCase()}
+                Portal: {(user?.role || "USER").toUpperCase()}
               </Badge>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <Link to="/">
-              <Button variant="ghost" size="sm" icon={Home} className="hidden sm:inline-flex">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Home}
+                className="hidden sm:inline-flex"
+              >
                 Marketplace
               </Button>
             </Link>
 
             {/* User Profile Pill */}
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+            <Link
+              to={
+                ["USER", "CUSTOMER"].includes((user?.role || "").toUpperCase())
+                  ? "/profile"
+                  : getRoleDashboardPath(user?.role)
+              }
+              aria-label="Open profile"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs hover:border-brand-saffron-300 hover:bg-brand-saffron-50 focus:outline-none focus:ring-2 focus:ring-brand-saffron-500"
+            >
               <div className="w-7 h-7 rounded-lg bg-brand-navy-900 text-white flex items-center justify-center font-bold">
                 <RoleIcon className="w-4 h-4 text-brand-saffron-400" />
               </div>
               <div className="hidden sm:block text-left">
-                <p className="font-bold text-slate-900 leading-tight">{user?.name || 'User'}</p>
-                <p className="text-[10px] text-slate-500 font-mono">{user?.phone || user?.email}</p>
+                <p className="font-bold text-slate-900 leading-tight">
+                  {user?.name || "User"}
+                </p>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  {user?.phone || user?.email}
+                </p>
               </div>
-            </div>
+            </Link>
 
             {/* Logout CTA */}
             <Button

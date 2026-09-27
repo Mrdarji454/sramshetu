@@ -1,5 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authService } from '../services/auth.service';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import { authService } from "../services/auth.service";
 
 const AuthContext = createContext(null);
 
@@ -8,32 +14,34 @@ const AuthContext = createContext(null);
  * Allowed roles: USER, COOPERATIVE, WORKER, ADMIN
  */
 export function getRoleDashboardPath(role) {
-  const normalizedRole = (role || '').toUpperCase();
+  const normalizedRole = (role || "").toUpperCase();
   switch (normalizedRole) {
-    case 'COOPERATIVE':
-      return '/cooperative/dashboard';
-    case 'WORKER':
-      return '/worker/dashboard';
-    case 'ADMIN':
-      return '/admin/dashboard';
-    case 'USER':
-    case 'CUSTOMER':
+    case "COOPERATIVE":
+      return "/cooperative/dashboard";
+    case "WORKER":
+      return "/worker/dashboard";
+    case "ADMIN":
+      return "/admin/dashboard";
+    case "USER":
+    case "CUSTOMER":
     default:
-      return '/user/dashboard';
+      return "/user/dashboard";
   }
 }
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
-      const savedUser = localStorage.getItem('shramsetu_user');
+      const savedUser = localStorage.getItem("shramsetu_user");
       return savedUser ? JSON.parse(savedUser) : null;
     } catch {
       return null;
     }
   });
 
-  const [token, setToken] = useState(() => localStorage.getItem('shramsetu_token') || null);
+  const [token, setToken] = useState(
+    () => localStorage.getItem("shramsetu_token") || null,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -44,21 +52,21 @@ export function AuthProvider({ children }) {
     let isMounted = true;
 
     async function initializeAuth() {
-      const savedToken = localStorage.getItem('shramsetu_token');
+      const savedToken = localStorage.getItem("shramsetu_token");
       if (savedToken) {
         try {
           const currentUser = await authService.getCurrentUser();
           if (isMounted) {
             setUser(currentUser);
-            localStorage.setItem('shramsetu_user', JSON.stringify(currentUser));
+            localStorage.setItem("shramsetu_user", JSON.stringify(currentUser));
           }
         } catch (err) {
           // Token is expired or invalid
           if (isMounted) {
             setUser(null);
             setToken(null);
-            localStorage.removeItem('shramsetu_token');
-            localStorage.removeItem('shramsetu_user');
+            localStorage.removeItem("shramsetu_token");
+            localStorage.removeItem("shramsetu_user");
           }
         }
       }
@@ -73,14 +81,17 @@ export function AuthProvider({ children }) {
     const handleSessionExpired = (e) => {
       setUser(null);
       setToken(null);
-      setError(e.detail?.message || 'Session expired. Please log in again.');
+      setError(e.detail?.message || "Session expired. Please log in again.");
     };
 
-    window.addEventListener('shramsetu:session-expired', handleSessionExpired);
+    window.addEventListener("shramsetu:session-expired", handleSessionExpired);
 
     return () => {
       isMounted = false;
-      window.removeEventListener('shramsetu:session-expired', handleSessionExpired);
+      window.removeEventListener(
+        "shramsetu:session-expired",
+        handleSessionExpired,
+      );
     };
   }, []);
 
@@ -96,12 +107,12 @@ export function AuthProvider({ children }) {
 
       setUser(authUser);
       setToken(authToken);
-      localStorage.setItem('shramsetu_token', authToken);
-      localStorage.setItem('shramsetu_user', JSON.stringify(authUser));
+      localStorage.setItem("shramsetu_token", authToken);
+      localStorage.setItem("shramsetu_user", JSON.stringify(authUser));
 
       return authUser;
     } catch (err) {
-      const msg = err.message || 'Login failed. Please check your credentials.';
+      const msg = err.message || "Login failed. Please check your credentials.";
       setError(msg);
       throw err;
     } finally {
@@ -121,12 +132,12 @@ export function AuthProvider({ children }) {
 
       setUser(authUser);
       setToken(authToken);
-      localStorage.setItem('shramsetu_token', authToken);
-      localStorage.setItem('shramsetu_user', JSON.stringify(authUser));
+      localStorage.setItem("shramsetu_token", authToken);
+      localStorage.setItem("shramsetu_user", JSON.stringify(authUser));
 
       return authUser;
     } catch (err) {
-      const msg = err.message || 'Registration failed. Please try again.';
+      const msg = err.message || "Registration failed. Please try again.";
       setError(msg);
       throw err;
     } finally {
@@ -145,13 +156,22 @@ export function AuthProvider({ children }) {
       setUser(null);
       setToken(null);
       setError(null);
-      localStorage.removeItem('shramsetu_token');
-      localStorage.removeItem('shramsetu_user');
+      localStorage.removeItem("shramsetu_token");
+      localStorage.removeItem("shramsetu_user");
       setIsLoading(false);
     }
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
+  const updateUser = useCallback(
+    (updates) => {
+      if (!user) return;
+      const updated = { ...user, ...updates };
+      setUser(updated);
+      localStorage.setItem("shramsetu_user", JSON.stringify(updated));
+    },
+    [user],
+  );
 
   const value = {
     user,
@@ -162,6 +182,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    updateUser,
     clearError,
     getRoleDashboardPath,
   };
@@ -172,7 +193,7 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

@@ -40,6 +40,8 @@ import {
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { getUserCoordinates } from "../../utils/geo.utils";
+import { profileService } from "../../services/profile.service";
+import { getDefaultAddressForBooking } from "../../utils/address.utils";
 
 const WORK_TYPES = [
   {
@@ -264,10 +266,45 @@ export function BookingWizardModal({
         setJobDescription("");
         setSpecialInstructions("");
         setAllocationPath("cooperative_assignment");
+        setLocationData({
+          street: "",
+          city: "",
+          state: "",
+          pincode: "",
+          landmark: "",
+          coordinates: [0, 0],
+        });
       }
 
       setCurrentStep(1);
     }
+  }, [isOpen, initialService]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      initialService?.location ||
+      initialService?.pincode ||
+      initialService?.city
+    )
+      return undefined;
+    let active = true;
+    profileService
+      .getProfile()
+      .then((profile) => {
+        if (!active) return;
+        const defaultAddress = getDefaultAddressForBooking(profile.addresses);
+        if (!defaultAddress) return;
+        setLocationData((current) =>
+          current.street || current.city || current.pincode
+            ? current
+            : { ...current, ...defaultAddress },
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [isOpen, initialService]);
 
   // Load suitable cooperatives & workers when entering Step 3

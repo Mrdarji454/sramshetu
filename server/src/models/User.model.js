@@ -1,6 +1,27 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const savedAddressSchema = new mongoose.Schema({
+  label: { type: String, enum: ['Home', 'Work', 'Other'], required: true },
+  street: { type: String, trim: true, required: true, maxlength: 200 },
+  city: { type: String, trim: true, required: true, maxlength: 100 },
+  state: { type: String, trim: true, required: true, maxlength: 100 },
+  pincode: { type: String, trim: true, required: true, match: /^[1-9][0-9]{5}$/ },
+  landmark: { type: String, trim: true, maxlength: 200, default: '' },
+  coordinates: {
+    type: [Number],
+    validate: {
+      validator: value => value.length === 0 || (
+        value.length === 2 && Number.isFinite(value[0]) && Number.isFinite(value[1]) &&
+        Math.abs(value[0]) <= 180 && Math.abs(value[1]) <= 90
+      ),
+      message: 'Coordinates must be [longitude, latitude]',
+    },
+    default: [],
+  },
+  isDefault: { type: Boolean, default: false },
+}, { timestamps: true });
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -62,6 +83,8 @@ const userSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    phoneVerified: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: false },
     isActive: {
       type: Boolean,
       default: true,
@@ -77,6 +100,10 @@ const userSchema = new mongoose.Schema(
       city: { type: String, trim: true },
       state: { type: String, trim: true },
       pincode: { type: String, trim: true },
+    },
+    savedAddresses: { type: [savedAddressSchema], default: [] },
+    preferences: {
+      language: { type: String, enum: ['en', 'hi'], default: 'en' },
     },
     fcmTokens: [
       {

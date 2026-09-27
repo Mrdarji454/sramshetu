@@ -31,7 +31,16 @@ async function runTests() {
   assert(user.role === 'customer' || user.role === 'USER', 'Default role is customer/USER');
   assert(user.isActive === true, 'Default isActive is true');
   assert(user.isVerified === false, 'Default isVerified is false');
+  assert(user.phoneVerified === false, 'Default phone verification is false');
+  assert(user.emailVerified === false, 'Default email verification is false');
   assert(user.avatar === 'https://cloudinary.com/avatar.jpg', 'User avatar alias works for profileImage');
+
+  user.savedAddresses.push({
+    label: 'Home', street: '17 Lake Road', city: 'Pune', state: 'Maharashtra',
+    pincode: '411001', coordinates: [73.8, 18.5], isDefault: true,
+  });
+  user.preferences.language = 'hi';
+  assert(!user.validateSync(), 'User validates saved addresses and profile preferences');
 
   const userValidationError = user.validateSync();
   assert(!userValidationError, 'Valid User passes schema validation');

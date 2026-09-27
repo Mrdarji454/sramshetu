@@ -1,20 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { ProtectedRoute } from './ProtectedRoute';
-import { LandingPage } from '../features/landing/LandingPage';
-import { LoginPage } from '../features/auth/LoginPage';
-import { RegisterPage } from '../features/auth/RegisterPage';
-import { UnauthorizedPage } from '../features/auth/UnauthorizedPage';
-import { UserDashboard } from '../features/customer/UserDashboard';
-import { CooperativeDashboard } from '../features/cooperative/CooperativeDashboard';
-import { WorkerDashboard } from '../features/worker/WorkerDashboard';
-import { AdminDashboard } from '../features/admin/AdminDashboard';
-import { WorkerOnboardingWizard } from '../features/worker/WorkerOnboardingWizard';
-import { CooperativeOnboardingWizard } from '../features/cooperative/CooperativeOnboardingWizard';
-import { AdminVerificationManager } from '../features/admin/AdminVerificationManager';
-import { RegistrationPendingPage } from '../features/worker/RegistrationPendingPage';
-import { DashboardLayout } from '../layouts/DashboardLayout';
-import workerService from '../services/worker.service';
+import React, { lazy, Suspense, useState, useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { ProtectedRoute } from "./ProtectedRoute";
+import { LandingPage } from "../features/landing/LandingPage";
+import { LoginPage } from "../features/auth/LoginPage";
+import { RegisterPage } from "../features/auth/RegisterPage";
+import { UnauthorizedPage } from "../features/auth/UnauthorizedPage";
+import { UserDashboard } from "../features/customer/UserDashboard";
+import { CooperativeDashboard } from "../features/cooperative/CooperativeDashboard";
+import { WorkerDashboard } from "../features/worker/WorkerDashboard";
+import { AdminDashboard } from "../features/admin/AdminDashboard";
+import { WorkerOnboardingWizard } from "../features/worker/WorkerOnboardingWizard";
+import { CooperativeOnboardingWizard } from "../features/cooperative/CooperativeOnboardingWizard";
+import { AdminVerificationManager } from "../features/admin/AdminVerificationManager";
+import { RegistrationPendingPage } from "../features/worker/RegistrationPendingPage";
+import { DashboardLayout } from "../layouts/DashboardLayout";
+import workerService from "../services/worker.service";
+
+const UserProfilePage = lazy(() =>
+  import("../features/customer/UserProfilePage").then((module) => ({
+    default: module.UserProfilePage,
+  })),
+);
 
 function WorkerOnboardingPage() {
   const [loading, setLoading] = useState(true);
@@ -31,21 +37,26 @@ function WorkerOnboardingPage() {
 
         const isVer = Boolean(
           res?.isVerified ||
-          res?.registrationStatus === 'APPROVED' ||
-          String(res?.verificationStatus?.status || res?.verificationStatus || '').toLowerCase() === 'verified'
+          res?.registrationStatus === "APPROVED" ||
+          String(
+            res?.verificationStatus?.status || res?.verificationStatus || "",
+          ).toLowerCase() === "verified",
         );
 
         if (isVer) {
-          navigate('/worker/dashboard', { replace: true });
+          navigate("/worker/dashboard", { replace: true });
           return;
         }
 
-        if (res?.registrationStatus === 'PENDING_APPROVAL' || res?.registrationStatus === 'PENDING_ADMIN_APPROVAL') {
-          navigate('/registration-pending', { replace: true });
+        if (
+          res?.registrationStatus === "PENDING_APPROVAL" ||
+          res?.registrationStatus === "PENDING_ADMIN_APPROVAL"
+        ) {
+          navigate("/registration-pending", { replace: true });
           return;
         }
       } catch (err) {
-        console.error('Failed to check onboarding status:', err);
+        console.error("Failed to check onboarding status:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -68,8 +79,12 @@ function WorkerOnboardingPage() {
 
   const isVerified = Boolean(
     workerStatus?.isVerified ||
-    workerStatus?.registrationStatus === 'APPROVED' ||
-    String(workerStatus?.verificationStatus?.status || workerStatus?.verificationStatus || '').toLowerCase() === 'verified'
+    workerStatus?.registrationStatus === "APPROVED" ||
+    String(
+      workerStatus?.verificationStatus?.status ||
+        workerStatus?.verificationStatus ||
+        "",
+    ).toLowerCase() === "verified",
   );
 
   if (isVerified) {
@@ -124,7 +139,7 @@ export function AppRoutes() {
       <Route
         path="/registration-pending"
         element={
-          <ProtectedRoute allowedRoles={['WORKER']}>
+          <ProtectedRoute allowedRoles={["WORKER"]}>
             <RegistrationPendingPage />
           </ProtectedRoute>
         }
@@ -135,8 +150,27 @@ export function AppRoutes() {
       <Route
         path="/user/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['USER', 'CUSTOMER']}>
+          <ProtectedRoute allowedRoles={["USER", "CUSTOMER"]}>
             <UserDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute allowedRoles={["USER", "CUSTOMER"]}>
+            <Suspense
+              fallback={
+                <div
+                  className="p-10 text-center text-sm text-slate-500"
+                  role="status"
+                >
+                  Loading profile…
+                </div>
+              }
+            >
+              <UserProfilePage />
+            </Suspense>
           </ProtectedRoute>
         }
       />
@@ -145,7 +179,7 @@ export function AppRoutes() {
       <Route
         path="/cooperative/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['COOPERATIVE']}>
+          <ProtectedRoute allowedRoles={["COOPERATIVE"]}>
             <CooperativeDashboard />
           </ProtectedRoute>
         }
@@ -153,7 +187,7 @@ export function AppRoutes() {
       <Route
         path="/cooperative/onboarding"
         element={
-          <ProtectedRoute allowedRoles={['COOPERATIVE']}>
+          <ProtectedRoute allowedRoles={["COOPERATIVE"]}>
             <CooperativeOnboardingPage />
           </ProtectedRoute>
         }
@@ -163,7 +197,7 @@ export function AppRoutes() {
       <Route
         path="/worker/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['WORKER']}>
+          <ProtectedRoute allowedRoles={["WORKER"]}>
             <WorkerDashboard />
           </ProtectedRoute>
         }
@@ -171,21 +205,30 @@ export function AppRoutes() {
       <Route
         path="/worker/onboarding"
         element={
-          <ProtectedRoute allowedRoles={['WORKER']}>
+          <ProtectedRoute allowedRoles={["WORKER"]}>
             <WorkerOnboardingPage />
           </ProtectedRoute>
         }
       />
       {/* Requirement 10: Automatic aliases for worker registration URLs */}
-      <Route path="/worker/register" element={<Navigate to="/worker/onboarding" replace />} />
-      <Route path="/worker/registration" element={<Navigate to="/worker/onboarding" replace />} />
-      <Route path="/worker/profile-setup" element={<Navigate to="/worker/onboarding" replace />} />
+      <Route
+        path="/worker/register"
+        element={<Navigate to="/worker/onboarding" replace />}
+      />
+      <Route
+        path="/worker/registration"
+        element={<Navigate to="/worker/onboarding" replace />}
+      />
+      <Route
+        path="/worker/profile-setup"
+        element={<Navigate to="/worker/onboarding" replace />}
+      />
 
       {/* 4. ADMIN -> /admin/dashboard & /admin/verifications */}
       <Route
         path="/admin/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
             <AdminDashboard />
           </ProtectedRoute>
         }
@@ -193,7 +236,7 @@ export function AppRoutes() {
       <Route
         path="/admin/verifications"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
             <AdminVerificationsPage />
           </ProtectedRoute>
         }
