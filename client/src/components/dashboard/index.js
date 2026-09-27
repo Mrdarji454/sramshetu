@@ -8,4 +8,5 @@ export { Modal } from './Modal';
 export { Pagination } from './Pagination';
 export { WorkloadPredictionCard } from './WorkloadPredictionCard';
 export { CooperativeWorkloadWidget } from './CooperativeWorkloadWidget';
+export { LiveDispatchMap } from './LiveDispatchMap';
 
