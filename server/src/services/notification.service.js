@@ -68,6 +68,8 @@ const titles = {
   START_OTP_VERIFIED: 'Start-work OTP verified', END_OTP_VERIFIED: 'End-work OTP verified',
   RATING_REMINDER: 'How was your service?', PAYMENT_RELEASED: 'Payment released',
   PAYMENT_CONFIRMED: 'Payment successful', SETTLEMENT_COMPLETED: 'Payment settlement completed',
+  PAYMENT_PENDING: 'Payment pending', ONLINE_PAYMENT_SUCCESSFUL: 'Online payment successful',
+  CASH_PAYMENT_CONFIRMED: 'Cash payment confirmed', PAYMENT_RECEIVED: 'Payment received',
   PAYMENT_FAILED: 'Payment failed', REFUND_ALERT: 'Refund needs attention',
 };
 export async function bookingNotification(booking, type, eventKey) {
@@ -77,6 +79,8 @@ export async function bookingNotification(booking, type, eventKey) {
     const worker = () => notifyWorker(booking.worker || booking.workerId, type === 'ASSIGNED' ? { ...payload, title: 'New job assignment', message: `You have been assigned ${booking.serviceName || 'a service booking'}. Review the booking to accept or reject it.` } : payload);
     const cooperative = () => notifyCooperative(booking.cooperative || booking.cooperativeId, payload);
     if (['START_OTP_VERIFIED', 'END_OTP_VERIFIED'].includes(type)) await worker();
+    else if (type === 'PAYMENT_RECEIVED') { await worker(); await cooperative(); }
+    else if (['PAYMENT_PENDING', 'ONLINE_PAYMENT_SUCCESSFUL', 'CASH_PAYMENT_CONFIRMED'].includes(type)) await customer();
     else if (type === 'PAYMENT_RELEASED') { await customer(); await worker(); await bookingNotification(booking, 'SETTLEMENT_COMPLETED', eventKey && `settlement:${eventKey}`); }
     else if (type === 'SETTLEMENT_COMPLETED') await cooperative();
     else if (type === 'NEW_BOOKING') { await worker(); await cooperative(); }

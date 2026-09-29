@@ -1,373 +1,346 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import axios from 'axios';
 import mongoose from 'mongoose';
 import { Booking } from '../models/Booking.model.js';
 import { Payment } from '../models/Payment.model.js';
+import { Worker } from '../models/Worker.model.js';
 import { AppError } from '../utils/AppError.js';
 import { bookingNotification, notifyAdmins, safelyNotify } from './notification.service.js';
 import { buildInvoicePdf } from './invoice.service.js';
 import { config } from '../config/env.js';
 
 export { buildInvoicePdf } from './invoice.service.js';
+
 const keyId = () => process.env.RAZORPAY_KEY_ID;
 const keySecret = () => process.env.RAZORPAY_KEY_SECRET;
 const ref = value => String(value?._id || value || '');
-const cancelled = booking => String(booking.status).toUpperCase() === 'CANCELLED';
-const unpaid = ['pending', 'failed'];
+const statusOf = value => String(value || '').toUpperCase();
 
 function requireDatabase() {
-    if (mongoose.connection.readyState !== 1) throw new AppError('Payments require a connected database', 503);
+  if (mongoose.connection.readyState !== 1) throw new AppError('Payments require a connected database', 503);
 }
 
 function requireGateway(payment) {
-    if (!keyId() || !keySecret()) throw new AppError('Razorpay is not configured. Set the server test API keys.', 503);
-    // Standard Checkout does not hold worker settlements. Block real money until
-    // Route/linked-account custody and payouts have been implemented.
-    if (process.env.RAZORPAY_TEST_MODE === 'false' || !keyId().startsWith('rzp_test_')) {
-        throw new AppError('This integration requires Razorpay Test Mode. Live settlement and payouts are not configured.', 503);
-    }
-    if (payment && (payment.gatewayKeyId !== keyId() || payment.razorpayOrderId?.startsWith('order_sim_'))) {
-        throw new AppError('This payment belongs to a different or unsupported gateway configuration', 409);
-    }
+  if (!keyId() || !keySecret()) throw new AppError('Razorpay Test Mode is not configured', 503);
+  if (process.env.RAZORPAY_TEST_MODE === 'false' || !keyId().startsWith('rzp_test_')) {
+    throw new AppError('Only Razorpay Test Mode is supported', 503);
+  }
+  if (payment?.gatewayKeyId && payment.gatewayKeyId !== keyId()) {
+    throw new AppError('This order belongs to a different Razorpay configuration', 409);
+  }
 }
 
 async function razorpayRequest(method, path, data) {
-    try {
-        return await axios({
-            method, url: `https://api.razorpay.com/v1${path}`, data,
-            auth: { username: keyId(), password: keySecret() },
-            headers: { 'Content-Type': 'application/json' }, timeout: 15000
-        });
-    } catch (error) {
-        const response = error.response?.data || null;
-        const gatewayError = response?.error || response;
-        const description = gatewayError?.description || gatewayError?.message || null;
-        if (config.env === 'development') {
-            console.error('[Razorpay] Gateway request failed', {
-                method,
-                path,
-                httpStatus: error.response?.status || null,
-                message: error.message,
-                errorCode: gatewayError?.code || null,
-                errorDescription: description,
-                response,
-            });
-        }
-        const appError = new AppError(description || error.message || 'Razorpay request failed', 502);
-        appError.razorpayDescription = description;
-        appError.razorpayResponse = response;
-        throw appError;
-    }
+  try {
+    return await axios({
+      method,
+      url: `https://api.razorpay.com/v1${path}`,
+      data,
+      auth: { username: keyId(), password: keySecret() },
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 15000,
+    });
+  } catch (error) {
+    const gateway = error.response?.data?.error || error.response?.data;
+    const message = gateway?.description || gateway?.message || error.message || 'Razorpay request failed';
+    if (config.env === 'development') console.error('[Razorpay]', method, path, message);
+    throw new AppError(message, 502);
+  }
 }
 
-async function alertAdmins(booking, type, title, suffix = '') {
-    await safelyNotify(() => notifyAdmins({
-        type, title, message: `${title} for booking ${ref(booking)}.`,
-        relatedBooking: booking._id, eventKey: `${type}:${ref(booking)}:${suffix}`
-    }));
+async function notifyPaymentFailure(booking, message) {
+  await safelyNotify(() => notifyAdmins({
+    type: 'PAYMENT_FAILED', title: 'Payment failed',
+    message: `${message} for booking ${ref(booking)}.`, relatedBooking: booking._id,
+    eventKey: `payment-failed:${ref(booking)}:${Date.now()}`,
+  }));
+}
+
+function assertWorkCompleted(booking) {
+  if (statusOf(booking.status) === 'CANCELLED') throw new AppError('Cancelled bookings cannot be paid', 409);
+  if (statusOf(booking.status) !== 'COMPLETED' || !booking.endOTP?.usedAt || !booking.qrVerification?.isVerified) {
+    throw new AppError('Payment is available only after successful End-Work OTP verification', 409);
+  }
+}
+
+function amountFromBooking(booking) {
+  const amount = Math.round(Number(booking.price?.totalAmount) * 100);
+  if (!Number.isSafeInteger(amount) || amount <= 0 || (booking.price?.currency || 'INR') !== 'INR') {
+    throw new AppError('Booking amount or currency is invalid', 400);
+  }
+  return amount;
+}
+
+function paymentSummary(payment) {
+  if (!payment) return null;
+  const bookingId = ref(payment.bookingId || payment.booking);
+  return {
+    paymentId: ref(payment), bookingId, paymentStatus: payment.paymentStatus, status: payment.paymentStatus,
+    paymentMethod: payment.paymentMethod, amount: payment.amount, amountRupees: payment.amount / 100,
+    currency: payment.currency, razorpayOrderId: payment.razorpayOrderId,
+    razorpayPaymentId: payment.razorpayPaymentId,
+    transactionId: payment.razorpayPaymentId || payment.receiptId,
+    receiptId: payment.receiptId, paidAt: payment.paidAt, failureReason: payment.failureReason,
+    testMode: payment.mode === 'test',
+    invoiceUrl: payment.paymentStatus === 'PAID' ? `/payments/${bookingId}/invoice` : null,
+  };
+}
+
+async function syncBooking(payment) {
+  await Booking.updateOne(
+    { _id: payment.bookingId || payment.booking, status: { $in: ['COMPLETED', 'completed'] }, 'endOTP.usedAt': { $ne: null } },
+    { $set: {
+      paymentRecord: payment._id, paymentStatus: payment.paymentStatus, paymentMethod: payment.paymentMethod,
+      'paymentProvider.provider': payment.paymentMethod === 'CASH' ? 'cash' : payment.paymentMethod === 'RAZORPAY' ? 'razorpay' : null,
+      'paymentProvider.orderId': payment.razorpayOrderId,
+      'paymentProvider.transactionId': payment.razorpayPaymentId || payment.receiptId,
+      'paymentProvider.status': payment.paymentStatus,
+      'paymentProvider.confirmedAt': payment.paidAt,
+      'paymentProvider.invoiceUrl': payment.paymentStatus === 'PAID' ? `/payments/${ref(payment.bookingId || payment.booking)}/invoice` : null,
+    } },
+  );
 }
 
 export function verifyRazorpaySignature(orderId, paymentId, signature, secret = keySecret()) {
-    if (typeof orderId !== 'string' || typeof paymentId !== 'string' || typeof signature !== 'string' ||
-        !/^[a-fA-F0-9]{64}$/.test(signature) || !secret) return false;
-    const expected = createHmac('sha256', secret).update(`${orderId}|${paymentId}`).digest();
-    return timingSafeEqual(expected, Buffer.from(signature, 'hex'));
-}
-
-function assertGatewayPayment(gateway, payment) {
-    if (!gateway || typeof gateway.id !== 'string' || !/^pay_[a-zA-Z0-9]+$/.test(gateway.id) ||
-        gateway.order_id !== payment.razorpayOrderId || gateway.amount !== payment.amount || gateway.currency !== payment.currency) {
-        throw new AppError('Razorpay payment does not match the stored order and amount', 409);
-    }
+  if (typeof orderId !== 'string' || typeof paymentId !== 'string' || typeof signature !== 'string' ||
+      !/^[a-fA-F0-9]{64}$/.test(signature) || !secret) return false;
+  const expected = createHmac('sha256', secret).update(`${orderId}|${paymentId}`).digest();
+  return timingSafeEqual(expected, Buffer.from(signature, 'hex'));
 }
 
 export async function captureAuthorizedPayment(gatewayPayment, payment, request = razorpayRequest) {
-    if (gatewayPayment.status !== 'authorized') return gatewayPayment;
-    let result;
-    try {
-        ({ data: result } = await request('post', `/payments/${encodeURIComponent(gatewayPayment.id)}/capture`, { amount: payment.amount, currency: payment.currency }));
-    } catch {
-        // Auto-capture can race this request; the response can also be lost.
-        ({ data: result } = await request('get', `/payments/${encodeURIComponent(gatewayPayment.id)}`));
-    }
-    if (result?.status !== 'captured') throw new AppError('Payment has not been captured. Refresh payment status before retrying.', 409);
-    return result;
+  if (gatewayPayment.status !== 'authorized') return gatewayPayment;
+  let result;
+  try {
+    ({ data: result } = await request('post', `/payments/${encodeURIComponent(gatewayPayment.id)}/capture`, {
+      amount: payment.amount, currency: payment.currency,
+    }));
+  } catch {
+    ({ data: result } = await request('get', `/payments/${encodeURIComponent(gatewayPayment.id)}`));
+  }
+  if (result?.status !== 'captured') throw new AppError('Payment has not been captured', 409);
+  return result;
 }
 
-function summary(payment) {
-    return {
-        status: payment.status, paymentId: ref(payment), razorpayOrderId: payment.razorpayOrderId,
-        razorpayPaymentId: payment.razorpayPaymentId, amount: payment.amount, currency: payment.currency,
-        paidAt: payment.paidAt, confirmedAt: payment.paidAt, releasedAt: payment.releasedAt,
-        refundStatus: payment.refundStatus, refundedAt: payment.refundedAt, failureReason: payment.failureReason,
-        testMode: payment.mode === 'test', invoiceUrl: payment.invoiceIssuedAt ? `/payments/${ref(payment.booking)}/invoice` : null
-    };
+function assertGatewayPayment(gateway, payment) {
+  if (!gateway || !/^pay_[A-Za-z0-9]+$/.test(gateway.id || '') ||
+      gateway.order_id !== payment.razorpayOrderId || gateway.amount !== payment.amount || gateway.currency !== payment.currency) {
+    throw new AppError('Razorpay payment does not match the stored order and amount', 409);
+  }
 }
 
-// Payment is authoritative. Conditional writes and refresh repair interrupted
-// two-document writes without requiring a replica set or downgrading money states.
-async function syncBookingPayment(payment) {
-    const filter = { _id: payment.booking };
-    if (unpaid.includes(payment.status)) filter.paymentStatus = { $in: unpaid };
-    if (payment.status === 'escrow_locked') filter.paymentStatus = { $nin: ['released', 'refunded'] };
-    if (payment.status === 'released') {
-        filter.status = { $in: ['COMPLETED', 'completed'] };
-        filter['endOTP.usedAt'] = { $ne: null };
-        filter.paymentStatus = { $ne: 'refunded' };
-    }
-    await Booking.updateOne(filter, {
-        $set: {
-            paymentRecord: payment._id, paymentStatus: payment.status, refundStatus: payment.refundStatus,
-            'paymentProvider.provider': 'razorpay', 'paymentProvider.orderId': payment.razorpayOrderId,
-            'paymentProvider.transactionId': payment.razorpayPaymentId,
-            'paymentProvider.status': payment.status === 'escrow_locked' ? 'captured' : payment.status,
-            'paymentProvider.confirmedAt': payment.paidAt, 'paymentProvider.refundStatus': payment.refundStatus,
-            'paymentProvider.refundConfirmedAt': payment.refundedAt,
-            'paymentProvider.invoiceUrl': summary(payment).invoiceUrl,
-        }
-    });
+export async function markWorkCompletedForPayment(booking) {
+  requireDatabase();
+  assertWorkCompleted(booking);
+  const amount = amountFromBooking(booking);
+  const customerId = booking.customer?._id || booking.customer;
+  const payment = await Payment.findOneAndUpdate(
+    { booking: booking._id },
+    { $setOnInsert: {
+      booking: booking._id, bookingId: booking._id, customer: customerId, userId: customerId,
+      workerId: booking.worker?._id || booking.worker || null,
+      cooperativeId: booking.cooperative?._id || booking.cooperative || null,
+      amount, currency: booking.price?.currency || 'INR', paymentStatus: 'WORK_COMPLETED', status: 'WORK_COMPLETED',
+      statusHistory: [{ status: 'WORK_COMPLETED', at: new Date() }],
+    } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+  if (payment.amount !== amount) throw new AppError('Stored payment amount differs from the final booking amount', 409);
+  await syncBooking(payment);
+  return payment;
 }
 
-async function recordCapturedPayment(booking, payment, gateway, signature) {
-    assertGatewayPayment(gateway, payment);
-    const captured = await captureAuthorizedPayment(gateway, payment);
-    assertGatewayPayment(captured, payment);
-    if (captured.id !== gateway.id || captured.status !== 'captured') throw new AppError('Payment is not captured', 409);
-    const updated = await Payment.findOneAndUpdate({ _id: payment._id, status: { $in: unpaid } }, {
-        $set: {
-            razorpayPaymentId: captured.id, status: 'escrow_locked', paidAt: new Date(), failureReason: null,
-            verifiedVia: signature ? 'checkout' : 'gateway', gatewayPaymentStatus: 'captured', ...(signature && { razorpaySignature: signature }),
-        }
-    }, { new: true });
-    payment = updated || await Payment.findById(payment._id);
-    if (payment.razorpayPaymentId !== captured.id) throw new AppError('A different payment is already linked to this booking', 409);
-    if (signature) await Payment.updateOne({ _id: payment._id, razorpayPaymentId: captured.id }, { $set: { razorpaySignature: signature, gatewayPaymentStatus: 'captured' } });
-    await syncBookingPayment(payment);
-    const freshBooking = await Booking.findById(booking._id);
-    if (payment.status === 'escrow_locked' && !cancelled(freshBooking)) {
-        await bookingNotification(freshBooking, 'PAYMENT_CONFIRMED', `payment-confirmed:${ref(payment)}`);
-    }
-    return payment;
+async function paymentForCompletedBooking(booking) {
+  assertWorkCompleted(booking);
+  return await Payment.findOne({ booking: booking._id }) || markWorkCompletedForPayment(booking);
 }
 
 export async function createPaymentOrder(booking, customerId) {
-    if (!config.paymentsEnabled) throw new AppError('Online payments are disabled in development; use the Start OTP directly.', 503);
-    requireDatabase();
-    if (ref(booking.customer) !== ref(customerId)) throw new AppError('Only the booking customer may pay', 403);
-    requireGateway();
-    if (['CANCELLED', 'COMPLETED', 'DISPUTED', 'IN_PROGRESS'].includes(String(booking.status).toUpperCase())) throw new AppError('This booking cannot be paid', 409);
-    if (!unpaid.includes(booking.paymentStatus)) throw new AppError('This booking already has a payment', 409);
-    const amount = Math.round(Number(booking.price?.totalAmount) * 100);
-    const currency = booking.price?.currency || 'INR';
-    if (!Number.isSafeInteger(amount) || amount <= 0 || currency !== 'INR') throw new AppError('Booking amount or currency is invalid', 400);
-    let payment = await Payment.findOne({ booking: booking._id });
-    if (payment) {
-        requireGateway(payment);
-        const refreshed = await refreshPaymentStatus(booking);
-        if (refreshed.reconciliationPending) throw new AppError('Could not check the existing order. Refresh payment status before retrying.', 502);
-        payment = await Payment.findById(payment._id);
-        if (!unpaid.includes(payment.status)) throw new AppError('This booking already has a confirmed payment; refresh the booking', 409);
-        if (payment.amount !== amount || payment.currency !== currency) throw new AppError('The existing payment amount differs from the booking. Contact support.', 409);
-    } else {
-        let order;
-        try {
-            ({ data: order } = await razorpayRequest('post', '/orders', {
-                amount, currency, partial_payment: false,
-                receipt: `ss_${ref(booking).slice(-16)}_${randomBytes(3).toString('hex')}`,
-                notes: { bookingId: ref(booking) },
-            }));
-        } catch (error) {
-            await alertAdmins(booking, 'PAYMENT_FAILED', 'Payment order could not be created', 'create-order');
-            throw error;
-        }
-        if (!/^order_[a-zA-Z0-9]+$/.test(order?.id) || order.amount !== amount || order.currency !== currency) throw new AppError('Razorpay returned an invalid order', 502);
-        // Unique booking index selects one order across concurrent servers. Only
-        // the winning order is handed to Checkout; failed orders are never replaced.
-        try {
-            payment = await Payment.findOneAndUpdate({ booking: booking._id }, {
-                $setOnInsert: {
-                    booking: booking._id, customer: customerId, razorpayOrderId: order.id,
-                    gatewayKeyId: keyId(), mode: 'test', amount, currency, status: 'pending',
-                }
-            }, { upsert: true, new: true, setDefaultsOnInsert: true });
-        } catch (error) {
-            if (error.code !== 11000) throw error;
-            payment = await Payment.findOne({ booking: booking._id });
-            if (!payment) throw error;
-        }
-    }
-    const freshBooking = await Booking.findById(booking._id);
-    if (cancelled(freshBooking) || !unpaid.includes(payment.status)) throw new AppError('Booking payment state changed. Refresh the booking.', 409);
-    await syncBookingPayment(payment);
+  requireDatabase();
+  if (ref(booking.customer) !== ref(customerId)) throw new AppError('Only the booking customer may pay', 403);
+  assertWorkCompleted(booking);
+  requireGateway();
+  let payment = await paymentForCompletedBooking(booking);
+  if (payment.paymentStatus === 'PAID') throw new AppError('This booking is already paid', 409);
+  if (payment.paymentMethod === 'CASH' || ['CASH_PENDING', 'CASH_RECEIVED'].includes(payment.paymentStatus)) {
+    throw new AppError('Cash on Delivery is already selected for this booking', 409);
+  }
+  if (payment.razorpayOrderId) {
+    if (payment.paymentStatus !== 'PAYMENT_PENDING') throw new AppError('This payment cannot create another order', 409);
     return { keyId: keyId(), orderId: payment.razorpayOrderId, amount: payment.amount, currency: payment.currency, paymentId: ref(payment), testMode: true };
+  }
+  const claimed = await Payment.findOneAndUpdate(
+    { _id: payment._id, paymentStatus: 'WORK_COMPLETED', razorpayOrderId: null, orderCreationState: { $ne: 'creating' } },
+    { $set: { orderCreationState: 'creating' } }, { new: true },
+  );
+  if (!claimed) throw new AppError('A payment order is already being created; retry shortly', 409);
+  try {
+    const { data: order } = await razorpayRequest('post', '/orders', {
+      amount: payment.amount, currency: payment.currency, partial_payment: false,
+      receipt: `ss_${ref(booking).slice(-20)}`, notes: { bookingId: ref(booking) },
+    });
+    if (!/^order_[A-Za-z0-9]+$/.test(order?.id || '') || order.amount !== payment.amount || order.currency !== payment.currency) {
+      throw new AppError('Razorpay returned an invalid order', 502);
+    }
+    payment = await Payment.findOneAndUpdate(
+      { _id: payment._id, paymentStatus: 'WORK_COMPLETED', razorpayOrderId: null, orderCreationState: 'creating' },
+      { $set: {
+        razorpayOrderId: order.id, gatewayKeyId: keyId(), mode: 'test', paymentMethod: 'RAZORPAY',
+        paymentStatus: 'PAYMENT_PENDING', status: 'PAYMENT_PENDING', orderCreationState: 'idle', failureReason: null,
+      }, $push: { statusHistory: { status: 'PAYMENT_PENDING', at: new Date(), actor: customerId } } },
+      { new: true },
+    );
+    if (!payment) throw new AppError('Payment state changed while creating the order', 409);
+    await syncBooking(payment);
+    await bookingNotification(await Booking.findById(booking._id), 'PAYMENT_PENDING', `payment-pending:${ref(payment)}`);
+    return { keyId: keyId(), orderId: payment.razorpayOrderId, amount: payment.amount, currency: payment.currency, paymentId: ref(payment), testMode: true };
+  } catch (error) {
+    await Payment.updateOne({ _id: payment._id, razorpayOrderId: null }, { $set: { orderCreationState: 'idle', failureReason: error.message } });
+    await notifyPaymentFailure(booking, error.message);
+    throw error;
+  }
 }
 
 export async function verifyPayment(booking, customerId, payload = {}) {
-    if (!config.paymentsEnabled) throw new AppError('Online payments are disabled in development.', 503);
-    requireDatabase();
-    if (ref(booking.customer) !== ref(customerId)) throw new AppError('Only the booking customer may verify payment', 403);
-    const { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: signature } = payload;
-    const payment = await Payment.findOne({ booking: booking._id });
-    if (!payment || payment.razorpayOrderId !== orderId) throw new AppError('Payment order does not match this booking', 400);
-    requireGateway(payment);
-    // Even duplicate callbacks must verify. HMAC always uses the stored order ID.
-    if (!verifyRazorpaySignature(payment.razorpayOrderId, paymentId, signature)) {
-        await alertAdmins(booking, 'PAYMENT_FAILED', 'Payment signature verification failed', 'signature');
-        throw new AppError('Razorpay signature verification failed', 400);
-    }
-    if (!/^pay_[a-zA-Z0-9]+$/.test(paymentId)) throw new AppError('Invalid Razorpay payment ID', 400);
-    if (payment.razorpayPaymentId && payment.razorpayPaymentId !== paymentId) throw new AppError('A different payment is linked to this booking', 409);
-    if (unpaid.includes(payment.status)) {
-        const { data } = await razorpayRequest('get', `/payments/${encodeURIComponent(paymentId)}`);
-        if (data.id !== paymentId) throw new AppError('Razorpay returned a different payment', 409);
-        await recordCapturedPayment(booking, payment, data, signature);
-    } else {
-        await Payment.updateOne({ _id: payment._id }, { $set: { razorpaySignature: signature } });
-    }
-    return refreshPaymentStatus(await Booking.findById(booking._id));
+  requireDatabase();
+  if (ref(booking.customer) !== ref(customerId)) throw new AppError('Only the booking customer may verify payment', 403);
+  assertWorkCompleted(booking);
+  const payment = await Payment.findOne({ booking: booking._id }).select('+razorpaySignature');
+  if (!payment || payment.paymentMethod !== 'RAZORPAY' || payment.paymentStatus !== 'PAYMENT_PENDING') {
+    if (payment?.paymentStatus === 'PAID') throw new AppError('This booking is already paid', 409);
+    throw new AppError('No pending Razorpay order exists for this booking', 409);
+  }
+  requireGateway(payment);
+  const { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: signature } = payload;
+  if (orderId !== payment.razorpayOrderId || !verifyRazorpaySignature(payment.razorpayOrderId, paymentId, signature)) {
+    await Payment.updateOne({ _id: payment._id }, { $set: { failureReason: 'Razorpay signature verification failed' } });
+    await notifyPaymentFailure(booking, 'Razorpay signature verification failed');
+    throw new AppError('Razorpay signature verification failed', 400);
+  }
+  const { data: gatewayPayment } = await razorpayRequest('get', `/payments/${encodeURIComponent(paymentId)}`);
+  assertGatewayPayment(gatewayPayment, payment);
+  let captured;
+  try {
+    captured = await captureAuthorizedPayment(gatewayPayment, payment);
+    assertGatewayPayment(captured, payment);
+    if (captured.status !== 'captured') throw new AppError('Razorpay payment was not captured', 409);
+  } catch (error) {
+    await Payment.updateOne({ _id: payment._id, paymentStatus: 'PAYMENT_PENDING' }, { $set: { failureReason: error.message } });
+    await notifyPaymentFailure(booking, error.message);
+    throw error;
+  }
+  const now = new Date();
+  const paid = await Payment.findOneAndUpdate(
+    { _id: payment._id, paymentStatus: 'PAYMENT_PENDING', razorpayPaymentId: null },
+    { $set: {
+      razorpayPaymentId: captured.id, razorpaySignature: signature, verifiedVia: 'checkout', gatewayPaymentStatus: 'captured',
+      paymentStatus: 'PAID', status: 'PAID', paidAt: now, invoiceIssuedAt: now,
+      invoiceNumber: `SS-${now.getUTCFullYear()}-${ref(payment).toUpperCase()}`, receiptId: captured.id, failureReason: null,
+    }, $push: { statusHistory: { status: 'PAID', at: now, actor: customerId } } },
+    { new: true },
+  );
+  if (!paid) throw new AppError('Duplicate or conflicting payment attempt blocked', 409);
+  await syncBooking(paid);
+  const fresh = await Booking.findById(booking._id);
+  await bookingNotification(fresh, 'ONLINE_PAYMENT_SUCCESSFUL', `online-paid:${ref(paid)}`);
+  await bookingNotification(fresh, 'PAYMENT_RECEIVED', `payment-received:${ref(paid)}`);
+  return paymentSummary(paid);
 }
 
-export async function assertBookingPaymentLocked(booking) {
-    requireDatabase();
-    if (!booking.paymentRecord || !['escrow_locked', 'held'].includes(booking.paymentStatus) ||
-        !['not_applicable', undefined, null].includes(booking.refundStatus)) {
-        throw new AppError('A verified payment must be locked before work verification', 409);
-    }
-    const payment = await Payment.findOne({
-        _id: booking.paymentRecord,
-        booking: booking._id,
-        status: 'escrow_locked',
-        refundStatus: 'not_applicable',
-    }).select('+razorpaySignature');
-    const validCheckoutSignature = payment?.verifiedVia === 'checkout' &&
-        verifyRazorpaySignature(payment.razorpayOrderId, payment.razorpayPaymentId, payment.razorpaySignature);
-    const gatewayConfirmed = payment?.gatewayPaymentStatus === 'captured' || payment?.verifiedVia === 'gateway' || validCheckoutSignature;
-    if (!payment?.paidAt || !payment.razorpayPaymentId || !gatewayConfirmed) {
-        throw new AppError('A captured Razorpay payment is required before work verification', 409);
-    }
-    return payment;
+export async function selectCashPayment(booking, customerId) {
+  requireDatabase();
+  if (ref(booking.customer) !== ref(customerId)) throw new AppError('Only the booking customer may select Cash on Delivery', 403);
+  let payment = await paymentForCompletedBooking(booking);
+  if (payment.paymentStatus === 'PAID') throw new AppError('This booking is already paid', 409);
+  if (payment.razorpayOrderId || payment.paymentMethod === 'RAZORPAY') throw new AppError('Online payment is already pending for this booking', 409);
+  payment = await Payment.findOneAndUpdate(
+    { _id: payment._id, paymentStatus: 'WORK_COMPLETED', paymentMethod: null },
+    { $set: { paymentMethod: 'CASH', paymentStatus: 'CASH_PENDING', status: 'CASH_PENDING', failureReason: null },
+      $push: { statusHistory: { status: 'CASH_PENDING', at: new Date(), actor: customerId } } }, { new: true },
+  );
+  if (!payment) throw new AppError('Cash payment was already selected or the payment state changed', 409);
+  await syncBooking(payment);
+  await bookingNotification(await Booking.findById(booking._id), 'PAYMENT_PENDING', `cash-pending:${ref(payment)}`);
+  return paymentSummary(payment);
 }
 
-export async function releasePaymentForBooking(booking) {
-    requireDatabase();
-    const fresh = await Booking.findById(booking._id);
-    if (String(fresh?.status).toUpperCase() !== 'COMPLETED' || !fresh.startOTP?.usedAt || !fresh.endOTP?.usedAt) throw new AppError('Payment release requires verified Start and End OTPs', 409);
-    let payment = await Payment.findOne({ _id: fresh.paymentRecord, booking: fresh._id });
-    if (!payment || !['escrow_locked', 'released'].includes(payment.status) || payment.refundStatus !== 'not_applicable' || !payment.paidAt || !payment.razorpayPaymentId) throw new AppError('No captured payment is available for release', 409);
-    if (payment.status === 'escrow_locked') {
-        const now = new Date();
-        payment = await Payment.findOneAndUpdate({ _id: payment._id, status: 'escrow_locked', refundStatus: 'not_applicable' }, {
-            $set: {
-                status: 'released', releasedAt: now, invoiceIssuedAt: now,
-                invoiceNumber: `SS-${now.getUTCFullYear()}-${ref(payment).toUpperCase()}`,
-            }
-        }, { new: true }) || await Payment.findById(payment._id);
-    }
-    if (payment.status !== 'released') throw new AppError('Payment state changed before release', 409);
-    await syncBookingPayment(payment);
-    await bookingNotification(await Booking.findById(fresh._id), 'PAYMENT_RELEASED', `payment-released:${ref(payment)}`);
-    return payment;
+async function isAssignedPaymentRecipient(booking, actorId, role) {
+  const normalizedRole = statusOf(role);
+  if (normalizedRole === 'ADMIN') return true;
+  if (normalizedRole === 'COOPERATIVE') {
+    if (ref(booking.cooperative) === ref(actorId)) return true;
+    const actor = await mongoose.model('User').findById(actorId).select('cooperativeId');
+    return ref(actor?.cooperativeId) === ref(booking.cooperative);
+  }
+  if (normalizedRole !== 'WORKER') return false;
+  if (ref(booking.worker) === ref(actorId)) return true;
+  const profile = await Worker.findOne({ user: actorId }).select('_id');
+  return ref(profile?._id) === ref(booking.worker);
 }
 
-async function applyRefund(booking, payment, refund) {
-    if (!refund || refund.payment_id !== payment.razorpayPaymentId || refund.amount !== payment.amount ||
-        !['pending', 'processed', 'failed'].includes(refund.status)) throw new AppError('Refund does not match this payment', 409);
-    const fields = { razorpayRefundId: refund.id, refundStatus: refund.status, refundFailureReason: null };
-    if (refund.status === 'processed') Object.assign(fields, { status: 'refunded', refundedAt: new Date() });
-    if (refund.status === 'failed') fields.refundFailureReason = 'Razorpay reported a failed refund; administrator review required';
-    payment = await Payment.findOneAndUpdate({ _id: payment._id, status: { $ne: 'refunded' } }, { $set: fields }, { new: true }) || await Payment.findById(payment._id);
-    await syncBookingPayment(payment);
-    await alertAdmins(booking, 'REFUND_ALERT', refund.status === 'processed' ? 'Booking payment refunded' : refund.status === 'failed' ? 'Refund needs review' : 'Refund is processing', refund.status);
-    return payment;
+export async function confirmCashReceived(booking, actorId, role) {
+  requireDatabase();
+  assertWorkCompleted(booking);
+  if (!await isAssignedPaymentRecipient(booking, actorId, role)) {
+    throw new AppError('Only the assigned worker or cooperative may confirm cash receipt', 403);
+  }
+  let payment = await Payment.findOne({ booking: booking._id });
+  if (!payment || payment.paymentMethod !== 'CASH' || payment.paymentStatus !== 'CASH_PENDING') {
+    if (payment?.paymentStatus === 'PAID') throw new AppError('Cash receipt is already confirmed', 409);
+    throw new AppError('Cash on Delivery must be selected by the customer first', 409);
+  }
+  const now = new Date();
+  const receiptId = `CASH-${ref(payment).slice(-12).toUpperCase()}`;
+  payment = await Payment.findOneAndUpdate(
+    { _id: payment._id, paymentStatus: 'CASH_PENDING', paymentMethod: 'CASH' },
+    { $set: { paymentStatus: 'CASH_RECEIVED', status: 'CASH_RECEIVED', cashReceivedAt: now,
+      cashReceivedBy: actorId, receiptId, failureReason: null },
+      $push: { statusHistory: { status: 'CASH_RECEIVED', at: now, actor: actorId } } }, { new: true },
+  );
+  if (!payment) throw new AppError('Duplicate cash confirmation blocked', 409);
+  payment = await Payment.findOneAndUpdate(
+    { _id: payment._id, paymentStatus: 'CASH_RECEIVED' },
+    { $set: { paymentStatus: 'PAID', status: 'PAID', paidAt: now, invoiceIssuedAt: now,
+      invoiceNumber: `SS-${now.getUTCFullYear()}-${ref(payment).toUpperCase()}` },
+      $push: { statusHistory: { status: 'PAID', at: now, actor: actorId } } }, { new: true },
+  );
+  await syncBooking(payment);
+  const fresh = await Booking.findById(booking._id);
+  await bookingNotification(fresh, 'CASH_PAYMENT_CONFIRMED', `cash-paid:${ref(payment)}`);
+  await bookingNotification(fresh, 'PAYMENT_RECEIVED', `payment-received:${ref(payment)}`);
+  return paymentSummary(payment);
 }
 
-async function reconcileRefund(booking, payment) {
-    const { data } = await razorpayRequest('get', `/payments/${encodeURIComponent(payment.razorpayPaymentId)}/refunds`);
-    const refund = data.items?.find(item => item.amount === payment.amount && item.payment_id === payment.razorpayPaymentId && item.status !== 'failed') ||
-        data.items?.find(item => item.id === payment.razorpayRefundId);
-    if (refund) return applyRefund(booking, payment, refund);
-    return payment;
-}
-
-export async function refundPaymentForBooking(booking) {
-    requireDatabase();
-    const fresh = await Booking.findById(booking._id);
-    if (!cancelled(fresh)) throw new AppError('Only cancelled bookings may be refunded', 409);
-    let payment = await Payment.findOne({ booking: fresh._id });
-    if (!payment || payment.status === 'refunded') return payment;
-    if (unpaid.includes(payment.status)) {
-        // Checkout may have succeeded before cancellation without a callback.
-        await refreshPaymentStatus(fresh);
-        return Payment.findById(payment._id);
-    }
-    if (payment.status !== 'escrow_locked') throw new AppError('Released payments require administrator refund review', 409);
-    requireGateway(payment);
-    if (payment.refundStatus !== 'not_applicable') return reconcileRefund(fresh, payment);
-    payment = await Payment.findOneAndUpdate({ _id: payment._id, status: 'escrow_locked', refundStatus: 'not_applicable' }, {
-        $set: {
-            refundStatus: 'pending', refundRequestedAt: new Date(),
-        }
-    }, { new: true });
-    if (!payment) return Payment.findOne({ booking: fresh._id });
-    await syncBookingPayment(payment);
-    await alertAdmins(fresh, 'REFUND_ALERT', 'Cancelled booking refund requested', 'requested');
-    try {
-        const { data } = await razorpayRequest('post', `/payments/${encodeURIComponent(payment.razorpayPaymentId)}/refund`, {
-            amount: payment.amount, notes: { bookingId: ref(fresh) }, receipt: `refund_${ref(payment)}`,
-        });
-        return await applyRefund(fresh, payment, data);
-    } catch {
-        // Timeouts can occur AFTER refund creation. Do not automatically resubmit;
-        // query Razorpay until its result is known, or have an admin review it.
-        await Payment.updateOne({ _id: payment._id, refundStatus: 'pending' }, { $set: { refundFailureReason: 'Refund confirmation unavailable; gateway reconciliation or administrator review required' } });
-        await alertAdmins(fresh, 'REFUND_ALERT', 'Refund confirmation needs review', 'unconfirmed');
-        return Payment.findById(payment._id);
-    }
-}
-
-export async function refreshPaymentStatus(booking) {
-    requireDatabase();
-    let payment = await Payment.findOne({ booking: booking._id });
-    if (!payment) return { status: booking.paymentStatus || 'pending', paymentId: null, refundStatus: booking.refundStatus || 'not_applicable', invoiceUrl: null };
-    requireGateway(payment);
-    let reconciliationPending = false;
-    if (unpaid.includes(payment.status)) {
-        try {
-            const { data } = await razorpayRequest('get', `/orders/${encodeURIComponent(payment.razorpayOrderId)}/payments`);
-            const match = item => item.order_id === payment.razorpayOrderId && item.amount === payment.amount && item.currency === payment.currency;
-            const successful = data.items?.find(item => match(item) && item.status === 'captured') || data.items?.find(item => match(item) && item.status === 'authorized');
-            if (successful) payment = await recordCapturedPayment(booking, payment, successful);
-            else {
-                const failed = data.items?.find(item => match(item) && item.status === 'failed');
-                if (failed) {
-                    payment = await Payment.findOneAndUpdate({ _id: payment._id, status: { $in: unpaid } }, {
-                        $set: {
-                            status: 'failed', failureReason: String(failed.error_description || failed.error_reason || 'Payment failed').slice(0, 500),
-                        }
-                    }, { new: true }) || await Payment.findById(payment._id);
-                    await alertAdmins(booking, 'PAYMENT_FAILED', 'Payment failed', failed.id);
-                }
-            }
-        } catch (error) {
-            if (error.statusCode !== 502) throw error;
-            reconciliationPending = true;
-        }
-    }
-    const fresh = await Booking.findById(booking._id);
-    if (cancelled(fresh) && payment.status === 'escrow_locked') {
-        try { payment = await refundPaymentForBooking(fresh); }
-        catch (error) { if (error.statusCode !== 502) throw error; reconciliationPending = true; }
-    } else if (String(fresh.status).toUpperCase() === 'COMPLETED' && ['escrow_locked', 'released'].includes(payment.status)) {
-        payment = await releasePaymentForBooking(fresh);
-    }
-    await syncBookingPayment(payment);
-    return { ...summary(payment), reconciliationPending };
+export async function getPaymentForBooking(booking) {
+  requireDatabase();
+  const payment = await Payment.findOne({ booking: booking._id });
+  if (!payment) return {
+    bookingId: ref(booking), paymentStatus: booking.paymentStatus || 'PENDING', status: booking.paymentStatus || 'PENDING',
+    paymentMethod: booking.paymentMethod || null, amount: amountFromBooking(booking), amountRupees: Number(booking.price?.totalAmount),
+    currency: booking.price?.currency || 'INR', invoiceUrl: null,
+  };
+  return paymentSummary(payment);
 }
 
 export async function invoiceForBooking(booking) {
-    requireDatabase();
-    if (String(booking.status).toUpperCase() === 'COMPLETED') await releasePaymentForBooking(booking);
-    const payment = await Payment.findOne({ booking: booking._id });
-    if (!payment?.invoiceIssuedAt || !payment.invoiceNumber) throw new AppError('Invoice is available after End OTP verification and payment release', 404);
-    return { buffer: buildInvoicePdf(booking, payment), filename: `${payment.invoiceNumber}.pdf` };
+  requireDatabase();
+  const payment = await Payment.findOne({ booking: booking._id });
+  if (!payment || payment.paymentStatus !== 'PAID' || !payment.invoiceIssuedAt || !payment.invoiceNumber) {
+    throw new AppError('Invoice is available only after payment confirmation', 404);
+  }
+  return { buffer: buildInvoicePdf(booking, payment), filename: `${payment.invoiceNumber}.pdf` };
+}
+
+export async function refundPaymentForBooking(booking) {
+  const payment = await Payment.findOne({ booking: booking._id });
+  if (payment?.paymentStatus === 'PAID') throw new AppError('Paid completed work requires administrator review', 409);
+  return payment;
+}
+
+export const refreshPaymentStatus = getPaymentForBooking;
+export async function assertBookingPaymentLocked() {
+  throw new AppError('Pre-work escrow is no longer used; payment unlocks after End-Work OTP verification', 409);
+}
+export async function releasePaymentForBooking() {
+  throw new AppError('Payment is confirmed after work completion; escrow release is not applicable', 409);
 }

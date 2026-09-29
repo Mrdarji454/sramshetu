@@ -8,7 +8,6 @@ import { Cooperative } from '../models/Cooperative.model.js';
 import { CatalogService } from './service.service.js';
 import { AppError } from '../utils/AppError.js';
 import { refundPaymentForBooking } from './payment.service.js';
-import { config } from '../config/env.js';
 
 // State machine valid transition graph
 export const VALID_TRANSITIONS = {
@@ -291,6 +290,7 @@ export class BookingService {
       scheduledTime,
       cooperativeId,
       workerId,
+      paymentMethodPreference = 'ONLINE',
       specialInstructions = '',
     } = bookingData;
 
@@ -434,7 +434,9 @@ export class BookingService {
         commissionCut: 0,
         currency: 'INR',
       },
-      paymentStatus: config.paymentsEnabled ? 'pending' : 'not_required',
+      paymentStatus: 'PENDING',
+      paymentMethodPreference: paymentMethodPreference === 'CASH' ? 'CASH' : 'ONLINE',
+      paymentMethod: null,
       refundStatus: 'not_applicable',
       qrVerification: {
         token: qrToken,

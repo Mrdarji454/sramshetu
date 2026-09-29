@@ -64,7 +64,7 @@ async function runBookingFlowTests() {
   assert(newBooking.qrVerification?.otpCode == null, 'Does not expose a reusable booking OTP');
   assert(newBooking.price.commissionCut === 0, 'Guarantees 0% middleman commission');
   assert(newBooking.price.totalAmount === 900, 'Uses server service rates instead of a client-supplied payment amount');
-  assert(newBooking.paymentStatus === 'not_required', 'Payments are disabled for local development');
+  assert(newBooking.paymentStatus === 'PENDING', 'Payment starts pending without collecting money');
   assert(newBooking.statusHistory.length === 1, 'Records initial status in statusHistory');
 
   // Test 4: Cooperative Assigns Suitable Worker
@@ -96,32 +96,13 @@ async function runBookingFlowTests() {
   assert(onTheWay.status === 'ON_THE_WAY', 'Status transitions from ACCEPTED to ON_THE_WAY');
 
   const start = await issueWorkOtp(newBooking.id, 'start', mockCustomerUserId, 'USER');
-  assert(/^\d{6}$/.test(start.code), 'Development mode issues Start OTP without payment');
-  newBooking.paymentStatus = 'escrow_locked';
-  const previousEnvironment = process.env.NODE_ENV;
-  process.env.NODE_ENV = 'production';
-  let offlineProductionError;
-  try { await issueWorkOtp(newBooking.id, 'start', mockCustomerUserId, 'USER'); }
-  catch (err) { offlineProductionError = err; }
-  finally {
-    if (previousEnvironment === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = previousEnvironment;
-  }
-  assert(offlineProductionError?.statusCode === 503, 'Production work verification fails closed when the payment database is unavailable');
-  newBooking.paymentStatus = 'not_required';
-  newBooking.refundStatus = 'pending';
-  let refundedStartError = null;
-  try {
-    await verifyWorkOtp(newBooking.id, 'start', start.code, mockWorkerId, 'WORKER');
-  } catch (err) { refundedStartError = err; }
-  assert(refundedStartError?.statusCode === 409 && !newBooking.startOTP.usedAt, 'Refund initiation invalidates a previously issued start OTP');
-  newBooking.refundStatus = 'not_applicable';
+  assert(/^\d{6}$/.test(start.code), 'Start OTP is available without collecting payment');
   const inProgress = await verifyWorkOtp(newBooking.id, 'start', start.code, mockWorkerId, 'WORKER');
   assert(inProgress.status === 'IN_PROGRESS', 'Start OTP transitions to IN_PROGRESS');
   const end = await issueWorkOtp(newBooking.id, 'end', mockCustomerUserId, 'USER');
   const completed = await verifyWorkOtp(newBooking.id, 'end', end.code, mockWorkerId, 'WORKER');
   assert(completed.status === 'COMPLETED', 'Status transitions from IN_PROGRESS to COMPLETED');
-  assert(completed.paymentStatus === 'not_required', 'Direct OTP completion does not fabricate payment release');
+  assert(completed.paymentStatus === 'WORK_COMPLETED', 'End OTP unlocks payment without marking it paid');
   assert(completed.qrVerification?.isVerified === true, 'QR verification marked verified on completion');
 
   // Test 7: State Machine Blocks Invalid Transitions

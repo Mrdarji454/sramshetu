@@ -99,9 +99,11 @@ export function BookingStatusTracker({
 }) {
   const {
     paymentStatus,
+    paymentDetails,
     isPaying,
     paymentMessage,
     handlePayment,
+    handleCashPayment,
     downloadInvoice,
     retryingVerification,
   } = useBookingPayment({ booking, onPaymentUpdated });
@@ -119,9 +121,6 @@ export function BookingStatusTracker({
   const normalizedPaymentStatus = String(
     paymentStatus || "pending",
   ).toLowerCase();
-  const paymentIsLocked = ["held", "escrow_locked"].includes(
-    normalizedPaymentStatus,
-  );
   return (
     <div
       className={`bg-white rounded-2xl border border-slate-200 p-6 shadow-sm ${className}`}
@@ -310,17 +309,15 @@ export function BookingStatusTracker({
       )}
 
       <div className="my-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-semibold">
-          Payment:{" "}
-          {paymentStatusLabel(
-            !paymentsEnabled &&
-              ["pending", "failed"].includes(normalizedPaymentStatus)
-              ? "not_required"
-              : normalizedPaymentStatus,
-          )}
-        </p>
+        <div className="text-sm font-semibold">
+          {!isCompleted && <p>Payment Method: {booking.paymentMethodPreference === "CASH" ? "Cash on Delivery" : "Online Payment (Razorpay)"}</p>}
+          {isCompleted && <p>Work Completed ✓</p>}
+          <p>Payment: {paymentStatusLabel(normalizedPaymentStatus)}</p>
+          {isCompleted && <p className="mt-1">Amount: ₹{booking.price?.totalAmount ?? booking.escrowAmount ?? 0}</p>}
+        </div>
         {paymentsEnabled &&
-          ["pending", "failed"].includes(normalizedPaymentStatus) &&
+          isCompleted &&
+          ["work_completed", "payment_pending"].includes(normalizedPaymentStatus) &&
           !isCancelled && (
             <Button
               variant="primary"
@@ -332,25 +329,36 @@ export function BookingStatusTracker({
                 ? "Confirming payment…"
                 : retryingVerification
                   ? "Retry verification"
-                  : `Pay ₹${booking.price?.totalAmount ?? booking.escrowAmount ?? 0}`}
+                  : "Pay Online"}
             </Button>
           )}
-        {booking.paymentProvider?.invoiceUrl && (
+        {isCompleted && normalizedPaymentStatus === "work_completed" && (
+          <Button variant="outline" size="sm" disabled={isPaying} onClick={handleCashPayment}>
+            Cash on Delivery
+          </Button>
+        )}
+        {(paymentDetails?.invoiceUrl || booking.paymentProvider?.invoiceUrl) && (
           <Button variant="outline" size="sm" onClick={downloadInvoice}>
             Download invoice
           </Button>
         )}
       </div>
+      {normalizedPaymentStatus === "cash_pending" && <p className="mb-3 text-sm text-slate-700">Cash payment selected. Please pay the worker/cooperative directly.</p>}
+      {normalizedPaymentStatus === "paid" && (
+        <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <strong>✓ Payment Completed</strong>
+          <p>Method: {paymentDetails?.paymentMethod || booking.paymentMethod}</p>
+          <p>Amount: ₹{booking.price?.totalAmount ?? 0}</p>
+          <p>Transaction/Receipt ID: {paymentDetails?.transactionId || booking.paymentProvider?.transactionId || "Recorded"}</p>
+        </div>
+      )}
       {paymentMessage && (
         <p role="status" className="mb-3 text-sm text-slate-700">
           {paymentMessage}
         </p>
       )}
       {currentStatus === "ON_THE_WAY" && <LiveTrackingMap booking={booking} />}
-      {["ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(currentStatus) &&
-        (currentStatus === "IN_PROGRESS" ||
-          !paymentsEnabled ||
-          paymentIsLocked) && <WorkVerificationPanel booking={booking} />}
+      {["ON_THE_WAY", "ARRIVED", "IN_PROGRESS"].includes(currentStatus) && <WorkVerificationPanel booking={booking} />}
       {isCompleted && <BookingReview booking={booking} />}
 
       {/* Worker & Location Details Card */}

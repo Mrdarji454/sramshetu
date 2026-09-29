@@ -48,17 +48,27 @@ export const bookingService = {
   },
 
   async createPaymentOrder(bookingId) {
-    const response = await apiClient.post(`/payments/${bookingId}/create-order`, {}, { timeout: 45000 });
+    const response = await apiClient.post('/payments/create-order', { bookingId }, { timeout: 45000 });
     return response.data || response;
   },
 
   async verifyPayment(bookingId, payload) {
-    const response = await apiClient.post(`/payments/${bookingId}/verify-payment`, payload, { timeout: 45000 });
+    const response = await apiClient.post('/payments/verify', { bookingId, ...payload }, { timeout: 45000 });
     return response.data || response;
   },
 
   async getPaymentStatus(bookingId) {
-    const response = await apiClient.get(`/payments/${bookingId}/payment-status`, { timeout: 45000 });
+    const response = await apiClient.get(`/payments/${bookingId}`, { timeout: 45000 });
+    return response.data || response;
+  },
+
+  async selectCashPayment(bookingId) {
+    const response = await apiClient.post('/payments/cash', { bookingId });
+    return response.data || response;
+  },
+
+  async confirmCashReceived(bookingId) {
+    const response = await apiClient.post(`/payments/${bookingId}/confirm-cash`);
     return response.data || response;
   },
 

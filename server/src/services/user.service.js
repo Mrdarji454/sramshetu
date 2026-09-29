@@ -226,7 +226,7 @@ export class UserService {
         refundStatus: booking.refundStatus || providerPayment.refundStatus || 'not_applicable',
         paymentMethod: maskedPaymentMethod
           ? `${maskedPaymentMethod.providerName} ···· ${maskedPaymentMethod.last4}`
-          : null,
+          : booking.paymentMethod || (providerPayment.provider === 'cash' ? 'CASH' : providerPayment.provider === 'razorpay' ? 'RAZORPAY' : null),
         maskedPaymentMethod,
         providerConfirmed,
         providerConfirmedAt: providerConfirmed ? providerPayment.confirmedAt : null,
@@ -251,8 +251,8 @@ export class UserService {
       providerIntegrationAvailable: Boolean(process.env.RAZORPAY_KEY_ID),
       paymentMethods,
       summary: {
-        paidAmount: sum(transactions.filter(item => item.providerConfirmed && ['paid', 'captured', 'succeeded', 'released'].includes(item.providerState))),
-        pendingAmount: sum(transactions.filter(item => item.paymentStatus === 'pending' && item.bookingStatus !== 'CANCELLED')),
+        paidAmount: sum(transactions.filter(item => item.providerConfirmed && ['paid', 'captured', 'succeeded', 'released'].includes(String(item.providerState).toLowerCase()))),
+        pendingAmount: sum(transactions.filter(item => ['pending', 'work_completed', 'payment_pending', 'cash_pending', 'cash_received'].includes(item.paymentStatus) && item.bookingStatus !== 'CANCELLED')),
         refundAmount: sum(transactions.filter(item => item.refundState === 'confirmed')),
         escrow: transactions.reduce((result, item) => {
           if (item.escrowState) result[item.escrowState] = (result[item.escrowState] || 0) + item.amount;

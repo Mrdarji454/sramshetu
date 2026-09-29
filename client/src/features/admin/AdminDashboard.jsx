@@ -426,6 +426,22 @@ export function AdminDashboard() {
             </Card>
           </div>
 
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+            {[
+              ['Total Revenue', `₹${Number(stats.payments?.totalRevenue || 0).toLocaleString('en-IN')}`],
+              ['Online Payments', Number(stats.payments?.onlinePayments || 0).toLocaleString()],
+              ['Cash Payments', Number(stats.payments?.cashPayments || 0).toLocaleString()],
+              ['Pending Payments', Number(stats.payments?.pendingPayments || 0).toLocaleString()],
+              ['Failed Payments', Number(stats.payments?.failedPayments || 0).toLocaleString()],
+            ].map(([label, value]) => (
+              <Card key={label} className="p-4 bg-white border-slate-200 shadow-sm">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">{label}</span>
+                <div className="text-xl font-extrabold text-brand-navy-900 font-display mt-1">{value}</div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-0.5 block">Database total</span>
+              </Card>
+            ))}
+          </div>
+
           {/* 2. LIVE DISPATCH COMMAND CENTER (MAIN FOCUS SECTION) */}
           {(activeTab === 'dashboard' || activeTab === 'dispatch') && (
             <div className="space-y-4">

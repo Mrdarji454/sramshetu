@@ -264,6 +264,20 @@ export function WorkerDashboard() {
     }
   };
 
+  const handleConfirmCash = async (job) => {
+    const jobId = job.id || job._id;
+    setIsProcessingId(jobId);
+    try {
+      await bookingService.confirmCashReceived(jobId);
+      setActionSuccessMsg("Cash payment received and confirmed.");
+      await loadData();
+    } catch (err) {
+      alert(err.message || "Cash receipt could not be confirmed");
+    } finally {
+      setIsProcessingId(null);
+    }
+  };
+
   const handleSaveProfile = async (editData) => {
     setIsSavingProfile(true);
     try {
@@ -964,13 +978,17 @@ export function WorkerDashboard() {
                                   <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                                   <span>
                                     Service Completed • ₹
-                                    {job.price?.totalAmount || 900} Settled via
-                                    DBT Escrow
+                                    {job.price?.totalAmount || 900} Payment status:{" "}
+                                    {String(job.paymentStatus || "WORK_COMPLETED").replaceAll("_", " ")}
                                   </span>
                                 </div>
-                                <Badge variant="verified" size="sm">
-                                  Paid in Full
-                                </Badge>
+                                {String(job.paymentStatus).toUpperCase() === "CASH_PENDING" ? (
+                                  <Button size="sm" loading={isProcessing} onClick={() => handleConfirmCash(job)}>Confirm Cash Received</Button>
+                                ) : (
+                                  <Badge variant="verified" size="sm">
+                                    {String(job.paymentStatus).toUpperCase() === "PAID" ? "Paid in Full" : "Payment Pending"}
+                                  </Badge>
+                                )}
                               </div>
                             )}
                           </div>

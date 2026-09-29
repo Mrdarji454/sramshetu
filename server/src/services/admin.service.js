@@ -3,6 +3,7 @@ import { safelyNotify, notifyWorker, notifyCooperative } from './notification.se
 import { Cooperative } from '../models/Cooperative.model.js';
 import { Worker, WorkerProfile } from '../models/WorkerProfile.model.js';
 import { Booking } from '../models/Booking.model.js';
+import { Payment } from '../models/Payment.model.js';
 import { inMemoryWorkers } from './worker.service.js';
 import { inMemoryCooperatives } from './cooperative.service.js';
 import { AppError } from '../utils/AppError.js';
@@ -82,6 +83,16 @@ export class AdminService {
       ]);
 
       const totalApplications = pendingVerifications + verifiedVerifications + rejectedVerifications;
+      const [paymentTotals = {}] = await Payment.aggregate([
+        { $group: {
+          _id: null,
+          totalRevenuePaise: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'PAID'] }, '$amount', 0] } },
+          onlinePayments: { $sum: { $cond: [{ $and: [{ $eq: ['$paymentStatus', 'PAID'] }, { $eq: ['$paymentMethod', 'RAZORPAY'] }] }, 1, 0] } },
+          cashPayments: { $sum: { $cond: [{ $and: [{ $eq: ['$paymentStatus', 'PAID'] }, { $eq: ['$paymentMethod', 'CASH'] }] }, 1, 0] } },
+          pendingPayments: { $sum: { $cond: [{ $in: ['$paymentStatus', ['WORK_COMPLETED', 'PAYMENT_PENDING', 'CASH_PENDING', 'CASH_RECEIVED']] }, 1, 0] } },
+          failedPayments: { $sum: { $cond: [{ $or: [{ $eq: ['$paymentStatus', 'FAILED'] }, { $ne: [{ $ifNull: ['$failureReason', null] }, null] }] }, 1, 0] } },
+        } },
+      ]);
 
       return {
         activeUsers,
@@ -96,6 +107,13 @@ export class AdminService {
           verified: verifiedVerifications,
           rejected: rejectedVerifications,
           total: totalApplications,
+        },
+        payments: {
+          totalRevenue: Number(paymentTotals.totalRevenuePaise || 0) / 100,
+          onlinePayments: Number(paymentTotals.onlinePayments || 0),
+          cashPayments: Number(paymentTotals.cashPayments || 0),
+          pendingPayments: Number(paymentTotals.pendingPayments || 0),
+          failedPayments: Number(paymentTotals.failedPayments || 0),
         },
         aiLatency: '14.2 ms',
         fairnessIndex: '98.6%',
@@ -138,6 +156,7 @@ export class AdminService {
         rejected: inMemRejected,
         total: inMemPending + inMemVerified + inMemRejected,
       },
+      payments: { totalRevenue: 0, onlinePayments: 0, cashPayments: 0, pendingPayments: 0, failedPayments: 0 },
       aiLatency: '14.2 ms',
       fairnessIndex: '98.6%',
     };

@@ -16,7 +16,7 @@ export function WorkVerificationPanel({ booking }) {
   };
   return <section className="my-5 rounded-2xl border border-orange-200 bg-orange-50 p-4 space-y-3">
     <h4 className="font-bold">{stage === 'start' ? 'Confirm artisan arrival' : 'Confirm completed work'}</h4>
-    <p className="text-sm text-slate-600">{stage === 'start' ? 'Generate a code when your artisan arrives. Share it with them to start work.' : 'After checking the work, generate a new code and share it with your artisan. Verification completes the booking and releases held escrow.'}</p>
+    <p className="text-sm text-slate-600">{stage === 'start' ? 'Generate a code when your artisan arrives. Share it with them to start work.' : 'After checking the work, generate a new code and share it with your artisan. Successful verification completes the booking and unlocks payment.'}</p>
     {otp && seconds > 0 && <div role="status"><strong className="text-3xl tracking-widest font-mono text-orange-800">{otp.code}</strong><p className="mt-1 text-xs">Expires in {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}. One-time use.</p></div>}
     {otp && !seconds && <p role="status" className="text-sm">Code expired. Generate a new code.</p>}
     <button type="button" disabled={busy} onClick={issue} className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Generating…' : otp ? 'Generate new code' : 'Generate customer code'}</button>

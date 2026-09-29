@@ -432,6 +432,19 @@ export function CooperativeOperationsCenter({
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [selectedZone, setSelectedZone] = useState(null);
   const [routeSummary, setRouteSummary] = useState(null);
+  const [confirmingCashId, setConfirmingCashId] = useState(null);
+  const confirmCash = async (booking) => {
+    const id = booking.id || booking._id;
+    setConfirmingCashId(id);
+    try {
+      await bookingService.confirmCashReceived(id);
+      await onRefresh?.();
+    } catch (error) {
+      alert(error.message || "Cash receipt could not be confirmed");
+    } finally {
+      setConfirmingCashId(null);
+    }
+  };
   const selectedBooking = useMemo(
     () =>
       bookings.find(
@@ -492,7 +505,7 @@ export function CooperativeOperationsCenter({
   );
   const paidBookings = bookings.filter(
     (booking) =>
-      String(booking.paymentStatus || "").toLowerCase() === "released",
+      String(booking.paymentStatus || "").toLowerCase() === "paid",
   );
   const revenue = paidBookings.reduce(
     (sum, booking) =>
@@ -584,7 +597,7 @@ export function CooperativeOperationsCenter({
         earnings: worker.jobs
           .filter(
             (job) =>
-              String(job.paymentStatus || "").toLowerCase() === "released",
+              String(job.paymentStatus || "").toLowerCase() === "paid",
           )
           .reduce(
             (sum, job) =>
@@ -1164,7 +1177,7 @@ export function CooperativeOperationsCenter({
                 "Held / escrow",
                 bookings
                   .filter((booking) =>
-                    ["held", "escrow_locked"].includes(
+                    ["payment_pending", "cash_pending", "cash_received"].includes(
                       String(booking.paymentStatus || "").toLowerCase(),
                     ),
                   )
@@ -1182,8 +1195,7 @@ export function CooperativeOperationsCenter({
                 bookings
                   .filter(
                     (booking) =>
-                      String(booking.paymentStatus || "").toLowerCase() ===
-                      "pending",
+                      ["pending", "work_completed"].includes(String(booking.paymentStatus || "").toLowerCase()),
                   )
                   .reduce(
                     (sum, booking) =>
@@ -1242,6 +1254,16 @@ export function CooperativeOperationsCenter({
                         <td>{statusOf(booking)}</td>
                         <td className="capitalize">
                           <div>{paymentStatusLabel(booking.paymentStatus)}</div>
+                          {String(booking.paymentStatus).toUpperCase() === "CASH_PENDING" && (
+                            <button
+                              type="button"
+                              disabled={confirmingCashId === (booking.id || booking._id)}
+                              className="text-[10px] font-bold text-emerald-700 underline disabled:opacity-50"
+                              onClick={() => confirmCash(booking)}
+                            >
+                              Confirm cash received
+                            </button>
+                          )}
                           {booking.paymentProvider?.transactionId && (
                             <div className="text-[10px] text-slate-500 font-mono">
                               {booking.paymentProvider.transactionId}

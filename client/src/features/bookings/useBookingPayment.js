@@ -5,18 +5,19 @@ import { paymentStatusLabel, paymentsEnabled } from '../../utils/paymentStatus';
 export { paymentStatusLabel, paymentsEnabled } from '../../utils/paymentStatus';
 
 const unwrap = result => result?.data || result;
-const paid = status => ['escrow_locked', 'released', 'refunded'].includes(status);
+const paid = status => String(status).toUpperCase() === 'PAID';
 
 export function useBookingPayment({ booking, customer, onPaymentUpdated, onBookingUpdated }) {
   const bookingId = booking?._id || booking?.id;
-  const [paymentStatus, setPaymentStatus] = useState(booking?.paymentStatus || 'pending');
+  const [paymentStatus, setPaymentStatus] = useState(booking?.paymentStatus || 'PENDING');
+  const [paymentDetails, setPaymentDetails] = useState(null);
   const [isPaying, setIsPaying] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState('');
   const busy = useRef(false);
   const pendingVerification = useRef(null);
 
   useEffect(() => {
-    setPaymentStatus(booking?.paymentStatus || 'pending');
+    setPaymentStatus(booking?.paymentStatus || 'PENDING');
   }, [bookingId, booking?.paymentStatus]);
   useEffect(() => {
     pendingVerification.current = null;
@@ -25,10 +26,13 @@ export function useBookingPayment({ booking, customer, onPaymentUpdated, onBooki
 
   const applyPayment = payment => {
     if (!payment?.status) throw new Error('Payment status was not returned by the server. Refresh before retrying.');
-    setPaymentStatus(payment.status);
+    const nextStatus = payment.paymentStatus || payment.status;
+    setPaymentStatus(nextStatus);
+    setPaymentDetails(payment);
     onBookingUpdated?.({
       ...booking,
-      paymentStatus: payment.status,
+      paymentStatus: nextStatus,
+      paymentMethod: payment.paymentMethod ?? booking.paymentMethod,
       refundStatus: payment.refundStatus ?? booking.refundStatus,
       paymentProvider: {
         ...booking.paymentProvider,
@@ -36,7 +40,7 @@ export function useBookingPayment({ booking, customer, onPaymentUpdated, onBooki
         ...(payment.paymentId ? { transactionId: payment.paymentId } : {}),
       },
     });
-    return payment;
+    return { ...payment, status: nextStatus };
   };
 
   const refreshPayment = async () => applyPayment(unwrap(await bookingService.getPaymentStatus(bookingId)));
@@ -65,7 +69,7 @@ export function useBookingPayment({ booking, customer, onPaymentUpdated, onBooki
       verified = paid(payment.status);
       if (verified) pendingVerification.current = null;
       setPaymentMessage(verified
-        ? 'Payment confirmed. Escrow is released after End OTP verification.'
+        ? 'Payment completed successfully.'
         : 'Payment is awaiting confirmation. Check the status before retrying.');
     } catch (error) {
       try {
@@ -90,6 +94,24 @@ export function useBookingPayment({ booking, customer, onPaymentUpdated, onBooki
     }
   };
 
+  const handleCashPayment = async () => {
+    if (!bookingId || busy.current) return;
+    busy.current = true;
+    setIsPaying(true);
+    setPaymentMessage('');
+    try {
+      const payment = applyPayment(unwrap(await bookingService.selectCashPayment(bookingId)));
+      setPaymentMessage('Cash payment selected. Please pay the worker/cooperative directly.');
+      return payment;
+    } catch (error) {
+      setPaymentMessage(error.message || 'Cash on Delivery could not be selected.');
+    } finally {
+      busy.current = false;
+      setIsPaying(false);
+      Promise.resolve(onPaymentUpdated?.()).catch(() => { });
+    }
+  };
+
   const downloadInvoice = async () => {
     try {
       await bookingService.downloadInvoice(bookingId);
@@ -99,7 +121,7 @@ export function useBookingPayment({ booking, customer, onPaymentUpdated, onBooki
   };
 
   return {
-    paymentStatus, isPaying, paymentMessage, handlePayment, downloadInvoice, paymentsEnabled,
+    paymentStatus, paymentDetails, isPaying, paymentMessage, handlePayment, handleCashPayment, downloadInvoice, paymentsEnabled,
     retryingVerification: Boolean(pendingVerification.current)
   };
 }
