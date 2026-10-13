@@ -1015,6 +1015,12 @@ export function WorkerDashboard() {
                     You are currently assigned to <strong>{zoneShiftOffers[0]?.currentZone || "your local zone"}</strong> and can be reassigned to <strong>{zoneShiftOffers[0]?.suggestedZone}</strong>.
                     {zoneShiftOffers[0]?.distanceKm ? ` Distance: ${zoneShiftOffers[0].distanceKm} km.` : ""}
                   </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-700">
+                    <span>Expected Jobs: <strong>{zoneShiftOffers[0]?.expectedJobs ?? 0}</strong></span>
+                    <span>Profession: <strong>{zoneShiftOffers[0]?.profession}</strong></span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-600">{zoneShiftOffers[0]?.reason}</p>
+                  {zoneShiftOffers[0]?.source === "RULE_BASED_FALLBACK" && <p className="mt-1 text-xs font-bold text-amber-700">Rule-based fallback</p>}
                 </div>
                 <div className="flex gap-2">
                   <Button

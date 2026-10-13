@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { Logo } from '../../components/common/Logo';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { Card } from '../../components/ui/Card';
-import adminService from '../../services/admin.service';
-import { LiveDispatchMap } from '../../components/dashboard/LiveDispatchMap';
-import { WorkloadPredictionCard } from '../../components/dashboard/WorkloadPredictionCard';
-import { AdminVerificationManager } from './AdminVerificationManager';
+import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { Logo } from "../../components/common/Logo";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import adminService from "../../services/admin.service";
+import { LiveDispatchMap } from "../../components/dashboard/LiveDispatchMap";
+import { WorkloadPredictionCard } from "../../components/dashboard/WorkloadPredictionCard";
+import { AdminVerificationManager } from "./AdminVerificationManager";
 import {
   LayoutDashboard,
   Radio,
@@ -38,9 +38,9 @@ import {
   Flame,
   ArrowUpRight,
   SlidersHorizontal,
-  X
-} from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+  X,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 /**
  * ShramSetu Live Operations Command Center
@@ -59,7 +59,7 @@ export function AdminDashboard() {
   const navigate = useNavigate();
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'dispatch', 'bookings', 'workers', 'customers', 'cooperatives', 'verifications', 'analytics', 'disputes', 'settings'
+  const [activeTab, setActiveTab] = useState("dashboard"); // 'dashboard', 'dispatch', 'bookings', 'workers', 'customers', 'cooperatives', 'verifications', 'analytics', 'disputes', 'settings'
 
   // Live Data States
   const [stats, setStats] = useState({
@@ -69,8 +69,8 @@ export function AdminDashboard() {
     totalCooperatives: 0,
     pendingVerifications: 0,
     ongoingJobs: 0,
-    aiLatency: '14.2 ms',
-    fairnessIndex: '98.6%',
+    aiLatency: "14.2 ms",
+    fairnessIndex: "98.6%",
   });
 
   const [dispatchData, setDispatchData] = useState({
@@ -89,12 +89,13 @@ export function AdminDashboard() {
 
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
-  const [mapFilter, setMapFilter] = useState('all'); // 'all', 'available', 'on_job', 'busy', 'requests', 'heatmap'
+  const [mapFilter, setMapFilter] = useState("all"); // 'all', 'available', 'on_job', 'busy', 'requests', 'heatmap'
   const [showHeatMap, setShowHeatMap] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [quickNotice, setQuickNotice] = useState(null);
+  const refreshInProgress = useRef(false);
 
   // AI Prediction State
   const [prediction, setPrediction] = useState(null);
@@ -102,10 +103,18 @@ export function AdminDashboard() {
 
   // Zone Shift Recommendations State
   const [zoneShiftRecommendations, setZoneShiftRecommendations] = useState([]);
+  const [zoneIntelligence, setZoneIntelligence] = useState({
+    zones: [],
+    summary: {},
+    lastUpdated: null,
+    source: null,
+  });
   const [zoneShiftLoading, setZoneShiftLoading] = useState(false);
 
   // Load Platform Telemetry & Live Dispatch Data
   const fetchAllData = async (isManual = false) => {
+    if (refreshInProgress.current) return;
+    refreshInProgress.current = true;
     if (isManual) setIsRefreshing(true);
     try {
       const [statsRes, dispatchRes, zoneShiftRes] = await Promise.allSettled([
@@ -114,27 +123,43 @@ export function AdminDashboard() {
         adminService.getZoneShiftRecommendations(),
       ]);
 
-      if (statsRes.status === 'fulfilled' && statsRes.value) {
+      if (statsRes.status === "fulfilled" && statsRes.value) {
         setStats(statsRes.value);
       }
 
-      if (dispatchRes.status === 'fulfilled' && dispatchRes.value) {
+      if (dispatchRes.status === "fulfilled" && dispatchRes.value) {
         const dData = dispatchRes.value;
         setDispatchData(dData);
         // Default select first active or pending booking
         if (!selectedBooking && dData.customerRequests?.length > 0) {
-          const firstOngoing = dData.customerRequests.find((b) => ['in_progress', 'on_the_way', 'assigned'].includes(b.status)) || dData.customerRequests[0];
+          const firstOngoing =
+            dData.customerRequests.find((b) =>
+              ["in_progress", "on_the_way", "assigned"].includes(b.status),
+            ) || dData.customerRequests[0];
           setSelectedBooking(firstOngoing);
         }
       }
 
-      if (zoneShiftRes.status === 'fulfilled') {
-        const recommendations = Array.isArray(zoneShiftRes.value) ? zoneShiftRes.value : [];
+      if (zoneShiftRes.status === "fulfilled") {
+        const intelligence = zoneShiftRes.value || {};
+        const recommendations = Array.isArray(intelligence)
+          ? intelligence
+          : intelligence.recommendations || [];
         setZoneShiftRecommendations(recommendations);
+        if (!Array.isArray(intelligence)) {
+          setZoneIntelligence(intelligence);
+          if (intelligence.zones?.length)
+            setDispatchData((previous) => ({
+              ...previous,
+              zones: intelligence.zones,
+              zoneLastUpdated: intelligence.lastUpdated,
+            }));
+        }
       }
     } catch (err) {
-      console.error('Error refreshing admin command center:', err);
+      console.error("Error refreshing admin command center:", err);
     } finally {
+      refreshInProgress.current = false;
       setIsLoading(false);
       if (isManual) setIsRefreshing(false);
     }
@@ -144,10 +169,10 @@ export function AdminDashboard() {
   const loadPrediction = async () => {
     setAiLoading(true);
     try {
-      const { predictWorkload } = await import('../../services/ai.service');
+      const { predictWorkload } = await import("../../services/ai.service");
       const res = await predictWorkload({
-        district: 'Pune Central',
-        serviceType: 'Electrical & Power',
+        district: "Pune Central",
+        serviceType: "Electrical & Power",
         applicationsLast7Days: 48,
         applicationsLast30Days: 194,
         pendingApplications: 12,
@@ -166,59 +191,88 @@ export function AdminDashboard() {
     fetchAllData();
     loadPrediction();
 
-    // Auto-refresh live operations telemetry every 8 seconds
+    // Avoid piling up refreshes while admin queries are still running.
     const interval = setInterval(() => {
       fetchAllData(false);
-    }, 8000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   // Sidebar Menu Items
   const navItems = [
-    { id: 'dashboard', label: 'Command Center', icon: LayoutDashboard },
-    { id: 'dispatch', label: 'Live Dispatch', icon: Radio, badge: dispatchData.summary?.activeDispatches || stats.ongoingJobs },
-    { id: 'bookings', label: 'Bookings Roster', icon: CalendarCheck2 },
-    { id: 'workers', label: 'Artisan Registry', icon: HardHat, count: stats.totalWorkers },
-    { id: 'customers', label: 'Citizen Accounts', icon: Users },
-    { id: 'cooperatives', label: 'Cooperative Guilds', icon: Building2 },
-    { id: 'verifications', label: 'Statutory Verification', icon: ShieldCheck, badge: stats.pendingVerifications, badgeColor: 'bg-amber-500' },
-    { id: 'analytics', label: 'Telemetry & Charts', icon: BarChart3 },
-    { id: 'disputes', label: 'Grievance & Disputes', icon: AlertTriangle },
-    { id: 'settings', label: 'System Protocols', icon: Settings },
+    { id: "dashboard", label: "Command Center", icon: LayoutDashboard },
+    {
+      id: "dispatch",
+      label: "Live Dispatch",
+      icon: Radio,
+      badge: dispatchData.summary?.activeDispatches || stats.ongoingJobs,
+    },
+    { id: "bookings", label: "Bookings Roster", icon: CalendarCheck2 },
+    {
+      id: "workers",
+      label: "Artisan Registry",
+      icon: HardHat,
+      count: stats.totalWorkers,
+    },
+    { id: "customers", label: "Citizen Accounts", icon: Users },
+    { id: "cooperatives", label: "Cooperative Guilds", icon: Building2 },
+    {
+      id: "verifications",
+      label: "Statutory Verification",
+      icon: ShieldCheck,
+      badge: stats.pendingVerifications,
+      badgeColor: "bg-amber-500",
+    },
+    { id: "analytics", label: "Telemetry & Charts", icon: BarChart3 },
+    { id: "disputes", label: "Grievance & Disputes", icon: AlertTriangle },
+    { id: "settings", label: "System Protocols", icon: Settings },
   ];
 
   // Filtered workers list for bottom/side panels
   const filteredWorkersList = (dispatchData.workers || []).filter((w) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    return w.name?.toLowerCase().includes(q) || w.profession?.toLowerCase().includes(q) || w.cooperative?.toLowerCase().includes(q);
+    return (
+      w.name?.toLowerCase().includes(q) ||
+      w.profession?.toLowerCase().includes(q) ||
+      w.cooperative?.toLowerCase().includes(q)
+    );
   });
 
   const handleMapFilterChange = (nextFilter) => {
     setMapFilter(nextFilter);
-    setShowHeatMap(nextFilter === 'heatmap');
+    setShowHeatMap(nextFilter === "heatmap");
   };
 
   const handleOpenPendingVerifications = () => {
-    setActiveTab('verifications');
+    setActiveTab("verifications");
   };
 
   const handleToggleHeatMap = () => {
-    const nextState = !(mapFilter === 'heatmap' || showHeatMap);
+    const nextState = !(mapFilter === "heatmap" || showHeatMap);
     setShowHeatMap(nextState);
-    setMapFilter(nextState ? 'heatmap' : 'all');
+    setMapFilter(nextState ? "heatmap" : "all");
   };
 
   const pendingVerificationCount = Number(stats.pendingVerifications || 0);
 
-  const pendingStatusValues = ['pending', 'pending_approval', 'pending-admin-approval', 'PENDING_APPROVAL', 'PENDING'];
-  const normalizeVerificationStatus = (status) => String(status || '').trim().toLowerCase();
+  const pendingStatusValues = [
+    "pending",
+    "pending_approval",
+    "pending-admin-approval",
+    "PENDING_APPROVAL",
+    "PENDING",
+  ];
+  const normalizeVerificationStatus = (status) =>
+    String(status || "")
+      .trim()
+      .toLowerCase();
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900">
@@ -249,15 +303,23 @@ export function AdminDashboard() {
               size="sm"
               icon={RefreshCw}
               onClick={() => fetchAllData(true)}
-              className={isRefreshing ? 'border-brand-saffron-400 text-brand-saffron-700' : ''}
+              className={
+                isRefreshing
+                  ? "border-brand-saffron-400 text-brand-saffron-700"
+                  : ""
+              }
             >
-              <span className="hidden sm:inline">{isRefreshing ? 'Syncing...' : 'Sync Live Data'}</span>
+              <span className="hidden sm:inline">
+                {isRefreshing ? "Syncing..." : "Sync Live Data"}
+              </span>
             </Button>
 
             {/* Notification Bell */}
-            <button 
+            <button
               onClick={() => {
-                setQuickNotice(`Verification Queue: ${stats.pendingVerifications} Pending Audits awaiting review`);
+                setQuickNotice(
+                  `Verification Queue: ${stats.pendingVerifications} Pending Audits awaiting review`,
+                );
                 setTimeout(() => setQuickNotice(null), 4000);
               }}
               className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 relative transition"
@@ -277,8 +339,12 @@ export function AdminDashboard() {
                 🛡️
               </div>
               <div className="hidden sm:block text-left">
-                <p className="font-bold text-slate-900 leading-tight">{user?.name || 'Administrator'}</p>
-                <p className="text-[10px] text-slate-500 font-mono">Gov-Tech Root Admin</p>
+                <p className="font-bold text-slate-900 leading-tight">
+                  {user?.name || "Administrator"}
+                </p>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Gov-Tech Root Admin
+                </p>
               </div>
             </div>
 
@@ -314,19 +380,27 @@ export function AdminDashboard() {
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                     isActive
-                      ? 'bg-brand-navy-900 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      ? "bg-brand-navy-900 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-brand-saffron-400' : 'text-slate-400'}`} />
+                    <Icon
+                      className={`w-4 h-4 ${isActive ? "text-brand-saffron-400" : "text-slate-400"}`}
+                    />
                     <span>{item.label}</span>
                   </div>
 
                   {item.badge !== undefined && item.badge > 0 && (
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      isActive ? 'bg-brand-saffron-500 text-white' : item.badgeColor ? `${item.badgeColor} text-white` : 'bg-slate-200 text-slate-800'
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        isActive
+                          ? "bg-brand-saffron-500 text-white"
+                          : item.badgeColor
+                            ? `${item.badgeColor} text-white`
+                            : "bg-slate-200 text-slate-800"
+                      }`}
+                    >
                       {item.badge}
                     </span>
                   )}
@@ -339,14 +413,20 @@ export function AdminDashboard() {
           <div className="px-4 pt-4 border-t border-slate-100 space-y-2 text-xs">
             <div className="flex items-center justify-between text-slate-500">
               <span>Fairness Metric:</span>
-              <span className="font-bold text-emerald-600">{stats.fairnessIndex}</span>
+              <span className="font-bold text-emerald-600">
+                {stats.fairnessIndex}
+              </span>
             </div>
             <div className="flex items-center justify-between text-slate-500">
               <span>AI Latency:</span>
-              <span className="font-mono text-indigo-600 font-bold">{stats.aiLatency}</span>
+              <span className="font-mono text-indigo-600 font-bold">
+                {stats.aiLatency}
+              </span>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500">
-              <span className="font-bold text-slate-700 block">MoSDE Compliance:</span>
+              <span className="font-bold text-slate-700 block">
+                MoSDE Compliance:
+              </span>
               100% Aadhaar & e-Shram Verified
             </div>
           </div>
@@ -361,7 +441,10 @@ export function AdminDashboard() {
                 <Sparkles className="w-4 h-4 text-brand-saffron-600 shrink-0" />
                 <span>{quickNotice}</span>
               </div>
-              <button onClick={() => setQuickNotice(null)} className="text-brand-saffron-600 hover:text-brand-saffron-900">
+              <button
+                onClick={() => setQuickNotice(null)}
+                className="text-brand-saffron-600 hover:text-brand-saffron-900"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -371,25 +454,37 @@ export function AdminDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
             {/* 1. Active Users */}
             <Card className="p-4 bg-white border-slate-200 shadow-sm hover:border-slate-300 transition">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Active Users</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Active Users
+              </span>
               <div className="text-xl font-extrabold text-brand-navy-900 font-display mt-1">
-                {Number(stats.activeUsers || stats.totalUsers || 0).toLocaleString()}
+                {Number(
+                  stats.activeUsers || stats.totalUsers || 0,
+                ).toLocaleString()}
               </div>
-              <span className="text-[10px] text-blue-600 font-semibold mt-0.5 block">Citizen Base</span>
+              <span className="text-[10px] text-blue-600 font-semibold mt-0.5 block">
+                Citizen Base
+              </span>
             </Card>
 
             {/* 2. Total Workers */}
             <Card className="p-4 bg-white border-slate-200 shadow-sm hover:border-slate-300 transition">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Total Workers</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Total Workers
+              </span>
               <div className="text-xl font-extrabold text-brand-navy-900 font-display mt-1">
                 {Number(stats.totalWorkers || 0).toLocaleString()}
               </div>
-              <span className="text-[10px] text-purple-600 font-semibold mt-0.5 block">National Registry</span>
+              <span className="text-[10px] text-purple-600 font-semibold mt-0.5 block">
+                National Registry
+              </span>
             </Card>
 
             {/* 3. Active Working Workers */}
             <Card className="p-4 bg-white border-slate-200 shadow-sm hover:border-slate-300 transition">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Active Workers</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Active Workers
+              </span>
               <div className="text-xl font-extrabold text-emerald-700 font-display mt-1">
                 {Number(stats.activeWorkers || 0).toLocaleString()}
               </div>
@@ -400,50 +495,86 @@ export function AdminDashboard() {
 
             {/* 4. Total Cooperative Societies */}
             <Card className="p-4 bg-white border-slate-200 shadow-sm hover:border-slate-300 transition">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Cooperatives</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Cooperatives
+              </span>
               <div className="text-xl font-extrabold text-indigo-900 font-display mt-1">
                 {Number(stats.totalCooperatives || 0).toLocaleString()} Guilds
               </div>
-              <span className="text-[10px] text-indigo-600 font-semibold mt-0.5 block">State Registry</span>
+              <span className="text-[10px] text-indigo-600 font-semibold mt-0.5 block">
+                State Registry
+              </span>
             </Card>
 
             {/* 5. Pending Verifications */}
             <Card className="p-4 bg-white border-slate-200 shadow-sm hover:border-slate-300 transition">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Pending Audits</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Pending Audits
+              </span>
               <div className="text-xl font-extrabold text-amber-900 font-display mt-1">
                 {Number(stats.pendingVerifications || 0).toLocaleString()}
               </div>
-              <span className="text-[10px] text-amber-600 font-semibold mt-0.5 block">Awaiting Review</span>
+              <span className="text-[10px] text-amber-600 font-semibold mt-0.5 block">
+                Awaiting Review
+              </span>
             </Card>
 
             {/* 6. Ongoing Jobs */}
             <Card className="p-4 bg-white border-slate-200 shadow-sm hover:border-slate-300 transition">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Ongoing Jobs</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Ongoing Jobs
+              </span>
               <div className="text-xl font-extrabold text-brand-saffron-600 font-display mt-1">
                 {Number(stats.ongoingJobs || 0).toLocaleString()}
               </div>
-              <span className="text-[10px] text-brand-saffron-700 font-semibold mt-0.5 block">Live Dispatch</span>
+              <span className="text-[10px] text-brand-saffron-700 font-semibold mt-0.5 block">
+                Live Dispatch
+              </span>
             </Card>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
             {[
-              ['Total Revenue', `₹${Number(stats.payments?.totalRevenue || 0).toLocaleString('en-IN')}`],
-              ['Online Payments', Number(stats.payments?.onlinePayments || 0).toLocaleString()],
-              ['Cash Payments', Number(stats.payments?.cashPayments || 0).toLocaleString()],
-              ['Pending Payments', Number(stats.payments?.pendingPayments || 0).toLocaleString()],
-              ['Failed Payments', Number(stats.payments?.failedPayments || 0).toLocaleString()],
+              [
+                "Total Revenue",
+                `₹${Number(stats.payments?.totalRevenue || 0).toLocaleString("en-IN")}`,
+              ],
+              [
+                "Online Payments",
+                Number(stats.payments?.onlinePayments || 0).toLocaleString(),
+              ],
+              [
+                "Cash Payments",
+                Number(stats.payments?.cashPayments || 0).toLocaleString(),
+              ],
+              [
+                "Pending Payments",
+                Number(stats.payments?.pendingPayments || 0).toLocaleString(),
+              ],
+              [
+                "Failed Payments",
+                Number(stats.payments?.failedPayments || 0).toLocaleString(),
+              ],
             ].map(([label, value]) => (
-              <Card key={label} className="p-4 bg-white border-slate-200 shadow-sm">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">{label}</span>
-                <div className="text-xl font-extrabold text-brand-navy-900 font-display mt-1">{value}</div>
-                <span className="text-[10px] text-slate-500 font-semibold mt-0.5 block">Database total</span>
+              <Card
+                key={label}
+                className="p-4 bg-white border-slate-200 shadow-sm"
+              >
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                  {label}
+                </span>
+                <div className="text-xl font-extrabold text-brand-navy-900 font-display mt-1">
+                  {value}
+                </div>
+                <span className="text-[10px] text-slate-500 font-semibold mt-0.5 block">
+                  Database total
+                </span>
               </Card>
             ))}
           </div>
 
           {/* 2. LIVE DISPATCH COMMAND CENTER (MAIN FOCUS SECTION) */}
-          {(activeTab === 'dashboard' || activeTab === 'dispatch') && (
+          {(activeTab === "dashboard" || activeTab === "dispatch") && (
             <div className="space-y-4">
               {/* Map Filter Chips Bar */}
               <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
@@ -453,12 +584,38 @@ export function AdminDashboard() {
                   </span>
 
                   {[
-                    { id: 'all', label: `All Workers (${dispatchData.workers.length})`, icon: Users },
-                    { id: 'available', label: `Available (${dispatchData.summary?.availableWorkers || 0})`, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-                    { id: 'on_job', label: `On Job (${dispatchData.summary?.onJobWorkers || 0})`, color: 'text-amber-700 bg-amber-50 border-amber-200' },
-                    { id: 'busy', label: `Busy (${dispatchData.summary?.busyWorkers || 0})`, color: 'text-red-700 bg-red-50 border-red-200' },
-                    { id: 'requests', label: `Customer Requests (${dispatchData.customerRequests.length})`, color: 'text-orange-700 bg-orange-50 border-orange-200' },
-                    { id: 'heatmap', label: 'Zone Heat Map 🔥', color: 'text-purple-700 bg-purple-50 border-purple-200 font-bold' },
+                    {
+                      id: "all",
+                      label: `All Workers (${dispatchData.workers.length})`,
+                      icon: Users,
+                    },
+                    {
+                      id: "available",
+                      label: `Available (${dispatchData.summary?.availableWorkers || 0})`,
+                      color:
+                        "text-emerald-700 bg-emerald-50 border-emerald-200",
+                    },
+                    {
+                      id: "on_job",
+                      label: `On Job (${dispatchData.summary?.onJobWorkers || 0})`,
+                      color: "text-amber-700 bg-amber-50 border-amber-200",
+                    },
+                    {
+                      id: "busy",
+                      label: `Busy (${dispatchData.summary?.busyWorkers || 0})`,
+                      color: "text-red-700 bg-red-50 border-red-200",
+                    },
+                    {
+                      id: "requests",
+                      label: `Customer Requests (${dispatchData.customerRequests.length})`,
+                      color: "text-orange-700 bg-orange-50 border-orange-200",
+                    },
+                    {
+                      id: "heatmap",
+                      label: "Zone Heat Map 🔥",
+                      color:
+                        "text-purple-700 bg-purple-50 border-purple-200 font-bold",
+                    },
                   ].map((chip) => {
                     const isChipActive = mapFilter === chip.id;
                     return (
@@ -467,8 +624,9 @@ export function AdminDashboard() {
                         onClick={() => handleMapFilterChange(chip.id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                           isChipActive
-                            ? 'bg-brand-navy-900 text-white border-brand-navy-900 shadow-sm'
-                            : chip.color || 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? "bg-brand-navy-900 text-white border-brand-navy-900 shadow-sm"
+                            : chip.color ||
+                              "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                         }`}
                       >
                         {chip.label}
@@ -483,7 +641,9 @@ export function AdminDashboard() {
                     onClick={handleToggleHeatMap}
                     className="px-3 py-1.5 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 text-xs font-bold hover:bg-purple-100"
                   >
-                    {showHeatMap || mapFilter === 'heatmap' ? 'Hide Heat Map' : 'Show Heat Map'}
+                    {showHeatMap || mapFilter === "heatmap"
+                      ? "Hide Heat Map"
+                      : "Show Heat Map"}
                   </button>
                   <button
                     type="button"
@@ -503,32 +663,35 @@ export function AdminDashboard() {
                     workers={filteredWorkersList}
                     customerRequests={dispatchData.customerRequests}
                     zones={dispatchData.zones}
+                    shiftRecommendations={zoneShiftRecommendations}
                     selectedBooking={selectedBooking}
                     selectedWorker={selectedWorker}
                     onSelectBooking={(b) => setSelectedBooking(b)}
                     onSelectWorker={(w) => setSelectedWorker(w)}
                     activeFilter={mapFilter}
-                    showHeatMap={showHeatMap || mapFilter === 'heatmap'}
+                    showHeatMap={showHeatMap || mapFilter === "heatmap"}
                     className="h-[540px] w-full rounded-xl overflow-hidden"
                   />
 
                   {/* Bottom Map Zone Telemetry Strip */}
                   <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase">Zone Clusters:</span>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase">
+                        Zone Clusters:
+                      </span>
                       {dispatchData.zones.slice(0, 4).map((z) => (
                         <button
                           key={z.name}
                           onClick={() => {
-                            setMapFilter('heatmap');
+                            setMapFilter("heatmap");
                             setShowHeatMap(true);
                           }}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
-                            z.activityLevel === 'high'
-                              ? 'bg-red-50 text-red-700 border-red-200'
-                              : z.activityLevel === 'medium'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            z.activityLevel === "high"
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : z.activityLevel === "medium"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
                           }`}
                         >
                           {z.name}: {z.activeWorkers} Active
@@ -556,13 +719,17 @@ export function AdminDashboard() {
                             {selectedBooking.serviceName}
                           </h3>
                         </div>
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
-                          ['completed'].includes(selectedBooking.status)
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : ['in_progress', 'on_the_way'].includes(selectedBooking.status)
-                            ? 'bg-blue-100 text-blue-800 animate-pulse'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                            ["completed"].includes(selectedBooking.status)
+                              ? "bg-emerald-100 text-emerald-800"
+                              : ["in_progress", "on_the_way"].includes(
+                                    selectedBooking.status,
+                                  )
+                                ? "bg-blue-100 text-blue-800 animate-pulse"
+                                : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
                           {selectedBooking.status}
                         </span>
                       </div>
@@ -571,22 +738,41 @@ export function AdminDashboard() {
                       <div className="space-y-2 text-xs">
                         <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase block">Citizen Customer</span>
-                            <span className="font-bold text-slate-800">{selectedBooking.customerName}</span>
-                            <p className="text-[11px] text-slate-500">{selectedBooking.customerPhone}</p>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                              Citizen Customer
+                            </span>
+                            <span className="font-bold text-slate-800">
+                              {selectedBooking.customerName}
+                            </span>
+                            <p className="text-[11px] text-slate-500">
+                              {selectedBooking.customerPhone}
+                            </p>
                           </div>
-                          <span className="text-slate-400">📍 {selectedBooking.district || 'Pune'}</span>
+                          <span className="text-slate-400">
+                            📍 {selectedBooking.district || "Pune"}
+                          </span>
                         </div>
 
                         <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] font-bold text-emerald-800 uppercase block">Assigned Artisan</span>
-                            <span className="font-bold text-emerald-950">{selectedBooking.workerName || 'Awaiting Dispatch'}</span>
-                            <p className="text-[11px] text-emerald-700">{selectedBooking.cooperativeName}</p>
+                            <span className="text-[10px] font-bold text-emerald-800 uppercase block">
+                              Assigned Artisan
+                            </span>
+                            <span className="font-bold text-emerald-950">
+                              {selectedBooking.workerName ||
+                                "Awaiting Dispatch"}
+                            </span>
+                            <p className="text-[11px] text-emerald-700">
+                              {selectedBooking.cooperativeName}
+                            </p>
                           </div>
                           <div className="text-right">
-                            <span className="font-bold text-emerald-900 block">ETA: {selectedBooking.eta}</span>
-                            <span className="text-[10px] text-emerald-600">{selectedBooking.distanceKm} km away</span>
+                            <span className="font-bold text-emerald-900 block">
+                              ETA: {selectedBooking.eta}
+                            </span>
+                            <span className="text-[10px] text-emerald-600">
+                              {selectedBooking.distanceKm} km away
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -598,20 +784,59 @@ export function AdminDashboard() {
                         </span>
                         <div className="space-y-2">
                           {[
-                            { label: 'Request Submitted', done: true },
-                            { label: 'Worker Assigned', done: Boolean(selectedBooking.workerName) },
-                            { label: 'Worker Accepted', done: ['accepted', 'on_the_way', 'in_progress', 'completed'].includes(selectedBooking.status) },
-                            { label: 'En Route', done: ['on_the_way', 'in_progress', 'completed'].includes(selectedBooking.status) },
-                            { label: 'Work In Progress', done: ['in_progress', 'completed'].includes(selectedBooking.status) },
-                            { label: 'Completed & Escrow Released', done: selectedBooking.status === 'completed' },
+                            { label: "Request Submitted", done: true },
+                            {
+                              label: "Worker Assigned",
+                              done: Boolean(selectedBooking.workerName),
+                            },
+                            {
+                              label: "Worker Accepted",
+                              done: [
+                                "accepted",
+                                "on_the_way",
+                                "in_progress",
+                                "completed",
+                              ].includes(selectedBooking.status),
+                            },
+                            {
+                              label: "En Route",
+                              done: [
+                                "on_the_way",
+                                "in_progress",
+                                "completed",
+                              ].includes(selectedBooking.status),
+                            },
+                            {
+                              label: "Work In Progress",
+                              done: ["in_progress", "completed"].includes(
+                                selectedBooking.status,
+                              ),
+                            },
+                            {
+                              label: "Completed & Escrow Released",
+                              done: selectedBooking.status === "completed",
+                            },
                           ].map((step, idx) => (
-                            <div key={step.label} className="flex items-center gap-2.5 text-xs">
-                              <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                step.done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
-                              }`}>
-                                {step.done ? '✓' : idx + 1}
+                            <div
+                              key={step.label}
+                              className="flex items-center gap-2.5 text-xs"
+                            >
+                              <div
+                                className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                  step.done
+                                    ? "bg-emerald-500 text-white"
+                                    : "bg-slate-200 text-slate-500"
+                                }`}
+                              >
+                                {step.done ? "✓" : idx + 1}
                               </div>
-                              <span className={step.done ? 'font-bold text-slate-900' : 'text-slate-400'}>
+                              <span
+                                className={
+                                  step.done
+                                    ? "font-bold text-slate-900"
+                                    : "text-slate-400"
+                                }
+                              >
                                 {step.label}
                               </span>
                             </div>
@@ -628,20 +853,55 @@ export function AdminDashboard() {
 
                         <div className="space-y-1.5">
                           {[
-                            { label: 'Skill Match', val: selectedBooking.matchingFactors?.skillMatch || 96 },
-                            { label: 'Distance Proximity', val: selectedBooking.matchingFactors?.distanceScore || 92 },
-                            { label: 'Availability Duty', val: selectedBooking.matchingFactors?.availabilityScore || 98 },
-                            { label: 'Current Workload', val: selectedBooking.matchingFactors?.workloadScore || 90 },
-                            { label: 'Citizen Rating', val: selectedBooking.matchingFactors?.ratingScore || 95 },
-                            { label: 'Cooperative Guild Priority', val: selectedBooking.matchingFactors?.cooperativePriority || 88 },
+                            {
+                              label: "Skill Match",
+                              val:
+                                selectedBooking.matchingFactors?.skillMatch ||
+                                96,
+                            },
+                            {
+                              label: "Distance Proximity",
+                              val:
+                                selectedBooking.matchingFactors
+                                  ?.distanceScore || 92,
+                            },
+                            {
+                              label: "Availability Duty",
+                              val:
+                                selectedBooking.matchingFactors
+                                  ?.availabilityScore || 98,
+                            },
+                            {
+                              label: "Current Workload",
+                              val:
+                                selectedBooking.matchingFactors
+                                  ?.workloadScore || 90,
+                            },
+                            {
+                              label: "Citizen Rating",
+                              val:
+                                selectedBooking.matchingFactors?.ratingScore ||
+                                95,
+                            },
+                            {
+                              label: "Cooperative Guild Priority",
+                              val:
+                                selectedBooking.matchingFactors
+                                  ?.cooperativePriority || 88,
+                            },
                           ].map((fac) => (
                             <div key={fac.label} className="space-y-0.5">
                               <div className="flex justify-between text-[10px] font-medium text-slate-600">
                                 <span>{fac.label}</span>
-                                <span className="font-bold text-indigo-950">{fac.val}%</span>
+                                <span className="font-bold text-indigo-950">
+                                  {fac.val}%
+                                </span>
                               </div>
                               <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${fac.val}%` }} />
+                                <div
+                                  className="bg-indigo-600 h-1.5 rounded-full"
+                                  style={{ width: `${fac.val}%` }}
+                                />
                               </div>
                             </div>
                           ))}
@@ -651,13 +911,18 @@ export function AdminDashboard() {
                       {/* Escrow Payment Details */}
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
                         <span className="text-slate-500">Escrow Value:</span>
-                        <span className="font-extrabold text-emerald-950 text-sm">₹{selectedBooking.amount} (100% DBT)</span>
+                        <span className="font-extrabold text-emerald-950 text-sm">
+                          ₹{selectedBooking.amount} (100% DBT)
+                        </span>
                       </div>
                     </Card>
                   ) : (
                     <Card className="p-8 bg-white border-slate-200 text-center text-slate-400 space-y-3">
                       <Radio className="w-8 h-8 mx-auto text-slate-300" />
-                      <p className="text-xs font-semibold">Select a customer booking on the map to view live dispatch telemetry</p>
+                      <p className="text-xs font-semibold">
+                        Select a customer booking on the map to view live
+                        dispatch telemetry
+                      </p>
                     </Card>
                   )}
 
@@ -665,28 +930,47 @@ export function AdminDashboard() {
                   {selectedWorker && (
                     <Card className="p-4 bg-white border-slate-200 shadow-sm space-y-3 animate-in fade-in">
                       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span className="text-[10px] font-bold uppercase text-slate-400">Inspected Artisan</span>
-                        <button onClick={() => setSelectedWorker(null)} className="text-slate-400 hover:text-slate-600">
+                        <span className="text-[10px] font-bold uppercase text-slate-400">
+                          Inspected Artisan
+                        </span>
+                        <button
+                          onClick={() => setSelectedWorker(null)}
+                          className="text-slate-400 hover:text-slate-600"
+                        >
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-brand-saffron-100 text-brand-saffron-700 flex items-center justify-center font-bold text-sm shrink-0 border border-brand-saffron-200">
-                          {selectedWorker.name ? selectedWorker.name.charAt(0) : 'W'}
+                          {selectedWorker.name
+                            ? selectedWorker.name.charAt(0)
+                            : "W"}
                         </div>
                         <div>
-                          <h4 className="font-bold text-slate-900 text-xs">{selectedWorker.name}</h4>
-                          <p className="text-[11px] text-slate-500">{selectedWorker.profession} • {selectedWorker.cooperative}</p>
+                          <h4 className="font-bold text-slate-900 text-xs">
+                            {selectedWorker.name}
+                          </h4>
+                          <p className="text-[11px] text-slate-500">
+                            {selectedWorker.profession} •{" "}
+                            {selectedWorker.cooperative}
+                          </p>
                           <div className="flex items-center gap-2 mt-1 text-[10px] font-bold">
-                            <span className="text-amber-600">⭐ {selectedWorker.rating} ({selectedWorker.totalReviews})</span>
-                            <span className="text-emerald-700">💼 {selectedWorker.jobsCompleted} Completed</span>
+                            <span className="text-amber-600">
+                              ⭐ {selectedWorker.rating} (
+                              {selectedWorker.totalReviews})
+                            </span>
+                            <span className="text-emerald-700">
+                              💼 {selectedWorker.jobsCompleted} Completed
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Service Radius: {selectedWorker.serviceRadius} km</span>
+                        <span className="text-slate-500">
+                          Service Radius: {selectedWorker.serviceRadius} km
+                        </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
                           {selectedWorker.state}
                         </span>
@@ -699,32 +983,49 @@ export function AdminDashboard() {
           )}
 
           {/* 3. WORKER REGISTRY VIEW */}
-          {activeTab === 'workers' && (
+          {activeTab === "workers" && (
             <div className="space-y-4">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-brand-navy-900">National Artisan Registry</h3>
-                  <p className="text-xs text-slate-500">All registered and e-KYC verified blue-collar professionals</p>
+                  <h3 className="text-base font-bold text-brand-navy-900">
+                    National Artisan Registry
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    All registered and e-KYC verified blue-collar professionals
+                  </p>
                 </div>
-                <Badge variant="verified">{dispatchData.workers.length} Registered Artisans</Badge>
+                <Badge variant="verified">
+                  {dispatchData.workers.length} Registered Artisans
+                </Badge>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredWorkersList.map((w) => (
-                  <Card key={w.id} className="p-4 bg-white border-slate-200 shadow-sm hover:shadow-md transition space-y-3">
+                  <Card
+                    key={w.id}
+                    className="p-4 bg-white border-slate-200 shadow-sm hover:shadow-md transition space-y-3"
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-700 border border-slate-200">
-                          {w.name ? w.name.charAt(0) : 'W'}
+                          {w.name ? w.name.charAt(0) : "W"}
                         </div>
                         <div>
-                          <h4 className="font-bold text-slate-900 text-sm">{w.name}</h4>
-                          <span className="text-xs text-slate-500 block">{w.profession}</span>
+                          <h4 className="font-bold text-slate-900 text-sm">
+                            {w.name}
+                          </h4>
+                          <span className="text-xs text-slate-500 block">
+                            {w.profession}
+                          </span>
                         </div>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                        w.state === 'available' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                          w.state === "available"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
                         {w.state}
                       </span>
                     </div>
@@ -736,7 +1037,9 @@ export function AdminDashboard() {
                       </div>
                       <div className="flex justify-between">
                         <span>Contact:</span>
-                        <span className="font-mono text-slate-800">{w.phone}</span>
+                        <span className="font-mono text-slate-800">
+                          {w.phone}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span>District:</span>
@@ -745,8 +1048,12 @@ export function AdminDashboard() {
                     </div>
 
                     <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                      <span className="font-bold text-amber-600">⭐ {w.rating} ({w.totalReviews} reviews)</span>
-                      <span className="font-bold text-slate-700">{w.jobsCompleted} Completed</span>
+                      <span className="font-bold text-amber-600">
+                        ⭐ {w.rating} ({w.totalReviews} reviews)
+                      </span>
+                      <span className="font-bold text-slate-700">
+                        {w.jobsCompleted} Completed
+                      </span>
                     </div>
                   </Card>
                 ))}
@@ -755,12 +1062,14 @@ export function AdminDashboard() {
           )}
 
           {/* 4. VERIFICATIONS TAB (STATUTORY MANAGER) */}
-          {activeTab === 'verifications' && (
-            <AdminVerificationManager onVerificationsUpdated={() => fetchAllData(false)} />
+          {activeTab === "verifications" && (
+            <AdminVerificationManager
+              onVerificationsUpdated={() => fetchAllData(false)}
+            />
           )}
 
           {/* 5. AI WORKLOAD & TELEMETRY CHARTS SECTION */}
-          {(activeTab === 'dashboard' || activeTab === 'analytics') && (
+          {(activeTab === "dashboard" || activeTab === "analytics") && (
             <div className="space-y-6">
               <WorkloadPredictionCard
                 prediction={prediction}
@@ -776,19 +1085,29 @@ export function AdminDashboard() {
                 <Card className="p-5 bg-white border-slate-200 shadow-sm space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-indigo-600" /> Jobs per District
+                      <MapPin className="w-4 h-4 text-indigo-600" /> Jobs per
+                      District
                     </h4>
-                    <span className="text-[10px] text-slate-400">Live Volume</span>
+                    <span className="text-[10px] text-slate-400">
+                      Live Volume
+                    </span>
                   </div>
                   <div className="space-y-2">
                     {dispatchData.analytics?.jobsPerDistrict?.map((item) => (
                       <div key={item.district} className="space-y-1">
                         <div className="flex justify-between text-xs font-medium text-slate-700">
                           <span>{item.district}</span>
-                          <span className="font-bold text-indigo-900">{item.jobs} jobs</span>
+                          <span className="font-bold text-indigo-900">
+                            {item.jobs} jobs
+                          </span>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                          <div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${Math.min(100, item.jobs * 2)}%` }} />
+                          <div
+                            className="bg-indigo-600 h-2 rounded-full"
+                            style={{
+                              width: `${Math.min(100, item.jobs * 2)}%`,
+                            }}
+                          />
                         </div>
                       </div>
                     ))}
@@ -799,18 +1118,31 @@ export function AdminDashboard() {
                 <Card className="p-5 bg-white border-slate-200 shadow-sm space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                      <UserCheck className="w-4 h-4 text-emerald-600" /> Worker Utilization Ratio
+                      <UserCheck className="w-4 h-4 text-emerald-600" /> Worker
+                      Utilization Ratio
                     </h4>
-                    <span className="text-[10px] text-emerald-600 font-bold">Duty Status</span>
+                    <span className="text-[10px] text-emerald-600 font-bold">
+                      Duty Status
+                    </span>
                   </div>
                   <div className="space-y-2.5 pt-1">
                     {dispatchData.analytics?.workerUtilization?.map((item) => (
-                      <div key={item.name} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 text-xs">
+                      <div
+                        key={item.name}
+                        className="flex items-center justify-between p-2 rounded-xl bg-slate-50 text-xs"
+                      >
                         <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="font-bold text-slate-800">{item.name}</span>
+                          <span
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="font-bold text-slate-800">
+                            {item.name}
+                          </span>
                         </div>
-                        <span className="font-mono font-extrabold text-slate-900">{item.value} Artisans</span>
+                        <span className="font-mono font-extrabold text-slate-900">
+                          {item.value} Artisans
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -820,23 +1152,35 @@ export function AdminDashboard() {
                 <Card className="p-5 bg-white border-slate-200 shadow-sm space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-brand-saffron-600" /> Guild Dispatch Compliance
+                      <Building2 className="w-4 h-4 text-brand-saffron-600" />{" "}
+                      Guild Dispatch Compliance
                     </h4>
-                    <span className="text-[10px] text-brand-saffron-600 font-bold">Audit Score</span>
+                    <span className="text-[10px] text-brand-saffron-600 font-bold">
+                      Audit Score
+                    </span>
                   </div>
                   <div className="space-y-2">
-                    {dispatchData.analytics?.cooperativePerformance?.map((coop) => (
-                      <div key={coop.name} className="p-2 rounded-xl border border-slate-100 space-y-1 text-xs">
-                        <div className="flex justify-between font-bold text-slate-800">
-                          <span>{coop.name}</span>
-                          <span className="text-emerald-600">⭐ {coop.rating}</span>
+                    {dispatchData.analytics?.cooperativePerformance?.map(
+                      (coop) => (
+                        <div
+                          key={coop.name}
+                          className="p-2 rounded-xl border border-slate-100 space-y-1 text-xs"
+                        >
+                          <div className="flex justify-between font-bold text-slate-800">
+                            <span>{coop.name}</span>
+                            <span className="text-emerald-600">
+                              ⭐ {coop.rating}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[11px] text-slate-500">
+                            <span>Completed: {coop.jobs} jobs</span>
+                            <span className="font-semibold text-indigo-700">
+                              {coop.compliance}% SLA Met
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-[11px] text-slate-500">
-                          <span>Completed: {coop.jobs} jobs</span>
-                          <span className="font-semibold text-indigo-700">{coop.compliance}% SLA Met</span>
-                        </div>
-                      </div>
-                    ))}
+                      ),
+                    )}
                   </div>
                 </Card>
               </div>
@@ -844,13 +1188,17 @@ export function AdminDashboard() {
           )}
 
           {/* Zone Shift Recommendations & Demand Alerts Cards (Newly Added) */}
-          {(activeTab === 'dashboard' || activeTab === 'dispatch') && (
+          {(activeTab === "dashboard" || activeTab === "dispatch") && (
             <div className="mb-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-700">Zone shift</p>
-                    <h3 className="mt-2 text-lg font-extrabold text-slate-900">Recommended worker reassignment</h3>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-700">
+                      Zone shift
+                    </p>
+                    <h3 className="mt-2 text-lg font-extrabold text-slate-900">
+                      Recommended worker reassignment
+                    </h3>
                   </div>
                   <div className="rounded-full bg-indigo-100 text-indigo-700 p-2">
                     <MapPin className="w-4 h-4" />
@@ -858,17 +1206,30 @@ export function AdminDashboard() {
                 </div>
 
                 {zoneShiftRecommendations.length === 0 ? (
-                  <p className="mt-4 text-sm text-slate-600">No active zone shift recommendations right now.</p>
+                  <p className="mt-4 text-sm text-slate-600">
+                    No active zone shift recommendations right now.
+                  </p>
                 ) : (
                   <div className="mt-4 space-y-3">
                     {zoneShiftRecommendations.slice(0, 3).map((item) => (
-                      <div key={item.workerId || item.zone} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div
+                        key={item.workerId || item.zone}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                      >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-bold text-slate-900">{item.zone || 'Target Zone'}</span>
-                          <Badge variant={item.priority === 'High' ? 'verified' : 'saffron'} size="sm">{item.priority || 'Medium'}</Badge>
+                          <span className="text-sm font-bold text-slate-900">
+                            {item.currentZone} → {item.suggestedZone}
+                          </span>
+                          <Badge variant="saffron" size="sm">
+                            {item.priority}
+                          </Badge>
                         </div>
                         <p className="mt-1 text-xs text-slate-600">
-                          Worker: {item.suggestedWorkers?.[0] || item.workerId || 'Worker'} • Skill: {item.requiredSkill || 'General'}
+                          Worker: {item.workerName} • Skill: {item.profession} •{" "}
+                          {item.distance} km
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          {item.reason}
                         </p>
                       </div>
                     ))}
@@ -879,8 +1240,12 @@ export function AdminDashboard() {
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Demand alerts</p>
-                    <h3 className="mt-2 text-lg font-extrabold text-slate-900">Current hot zones</h3>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+                      Demand alerts
+                    </p>
+                    <h3 className="mt-2 text-lg font-extrabold text-slate-900">
+                      Current hot zones
+                    </h3>
                   </div>
                   <div className="rounded-full bg-amber-100 text-amber-700 p-2">
                     <Flame className="w-4 h-4" />
@@ -888,15 +1253,63 @@ export function AdminDashboard() {
                 </div>
 
                 <div className="mt-4 space-y-3">
-                  {(dispatchData.zones || []).slice(0, 3).map((zone) => (
-                    <div key={zone.name || zone.zone || zone.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold text-slate-900">{zone.name || zone.zone || 'Zone'}</span>
-                        <span className="text-xs font-bold text-amber-700">{zone.requests || zone.count || 0}</span>
+                  {(dispatchData.zones || [])
+                    .filter((zone) =>
+                      ["HIGH", "CRITICAL"].includes(zone.demandLevel),
+                    )
+                    .slice(0, 3)
+                    .map((zone) => (
+                      <div
+                        key={zone.name || zone.zone || zone.id}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-slate-900">
+                            {zone.name || zone.zone || "Zone"}
+                          </span>
+                          <span className="text-xs font-bold text-amber-700">
+                            {zone.demandLevel} • Gap {zone.demandSupplyGap}
+                          </span>
+                        </div>
                       </div>
+                    ))}
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    [
+                      "High Demand Zones",
+                      zoneIntelligence.summary?.highDemandZones || 0,
+                    ],
+                    [
+                      "Worker Shortage Zones",
+                      zoneIntelligence.summary?.workerShortageZones || 0,
+                    ],
+                    [
+                      "Oversupply Zones",
+                      zoneIntelligence.summary?.oversupplyZones || 0,
+                    ],
+                    [
+                      "Recommended Shifts",
+                      zoneIntelligence.summary?.recommendedShifts || 0,
+                    ],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg bg-slate-50 p-2">
+                      <strong>{value}</strong>
+                      <div className="text-slate-500">{label}</div>
                     </div>
                   ))}
                 </div>
+                <p className="mt-3 text-[10px] text-slate-500">
+                  Last AI update:{" "}
+                  {zoneIntelligence.lastUpdated
+                    ? new Date(zoneIntelligence.lastUpdated).toLocaleString(
+                        "en-IN",
+                      )
+                    : "Pending"}
+                  {zoneIntelligence.source === "RULE_BASED_FALLBACK"
+                    ? " • Rule-based fallback"
+                    : ""}
+                </p>
               </div>
             </div>
           )}
@@ -907,4 +1320,3 @@ export function AdminDashboard() {
 }
 
 export default AdminDashboard;
-

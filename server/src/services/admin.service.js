@@ -8,6 +8,7 @@ import { inMemoryWorkers } from './worker.service.js';
 import { inMemoryCooperatives } from './cooperative.service.js';
 import { AppError } from '../utils/AppError.js';
 import mongoose from 'mongoose';
+import { getLatestZoneIntelligence } from './zoneShift.service.js';
 
 // Persistent verification review logs in memory
 const inMemoryReviewLogs = new Map();
@@ -84,14 +85,16 @@ export class AdminService {
 
       const totalApplications = pendingVerifications + verifiedVerifications + rejectedVerifications;
       const [paymentTotals = {}] = await Payment.aggregate([
-        { $group: {
-          _id: null,
-          totalRevenuePaise: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'PAID'] }, '$amount', 0] } },
-          onlinePayments: { $sum: { $cond: [{ $and: [{ $eq: ['$paymentStatus', 'PAID'] }, { $eq: ['$paymentMethod', 'RAZORPAY'] }] }, 1, 0] } },
-          cashPayments: { $sum: { $cond: [{ $and: [{ $eq: ['$paymentStatus', 'PAID'] }, { $eq: ['$paymentMethod', 'CASH'] }] }, 1, 0] } },
-          pendingPayments: { $sum: { $cond: [{ $in: ['$paymentStatus', ['WORK_COMPLETED', 'PAYMENT_PENDING', 'CASH_PENDING', 'CASH_RECEIVED']] }, 1, 0] } },
-          failedPayments: { $sum: { $cond: [{ $or: [{ $eq: ['$paymentStatus', 'FAILED'] }, { $ne: [{ $ifNull: ['$failureReason', null] }, null] }] }, 1, 0] } },
-        } },
+        {
+          $group: {
+            _id: null,
+            totalRevenuePaise: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'PAID'] }, '$amount', 0] } },
+            onlinePayments: { $sum: { $cond: [{ $and: [{ $eq: ['$paymentStatus', 'PAID'] }, { $eq: ['$paymentMethod', 'RAZORPAY'] }] }, 1, 0] } },
+            cashPayments: { $sum: { $cond: [{ $and: [{ $eq: ['$paymentStatus', 'PAID'] }, { $eq: ['$paymentMethod', 'CASH'] }] }, 1, 0] } },
+            pendingPayments: { $sum: { $cond: [{ $in: ['$paymentStatus', ['WORK_COMPLETED', 'PAYMENT_PENDING', 'CASH_PENDING', 'CASH_RECEIVED']] }, 1, 0] } },
+            failedPayments: { $sum: { $cond: [{ $or: [{ $eq: ['$paymentStatus', 'FAILED'] }, { $ne: [{ $ifNull: ['$failureReason', null] }, null] }] }, 1, 0] } },
+          }
+        },
       ]);
 
       return {
@@ -179,9 +182,9 @@ export class AdminService {
 
       workersList = workers.map((w) => {
         const u = w.user && typeof w.user === 'object' ? w.user : {};
-        const coords = w.location?.coordinates || (w.location?.longitude && w.location?.latitude ? [w.location.longitude, w.location.latitude] : [73.8567 + (Math.random() - 0.5) * 0.1, 18.5204 + (Math.random() - 0.5) * 0.1]);
-        const lng = coords[0] || 73.8567;
-        const lat = coords[1] || 18.5204;
+        const coords = w.liveLocation?.coordinates || w.location?.coordinates || (w.location?.longitude && w.location?.latitude ? [w.location.longitude, w.location.latitude] : null);
+        const lng = Array.isArray(coords) && coords.some(Number) ? Number(coords[0]) : null;
+        const lat = Array.isArray(coords) && coords.some(Number) ? Number(coords[1]) : null;
         const rawStatus = (w.availability?.status || 'available').toLowerCase();
 
         // Compute state: Available | On Job | Busy | Offline
@@ -216,9 +219,9 @@ export class AdminService {
       });
 
       bookingsList = bookings.map((b) => {
-        const coords = b.location?.coordinates || [73.8567 + (Math.random() - 0.5) * 0.08, 18.5204 + (Math.random() - 0.5) * 0.08];
-        const lng = coords[0] || 73.8567;
-        const lat = coords[1] || 18.5204;
+        const coords = b.location?.coordinates;
+        const lng = Array.isArray(coords) && coords.some(Number) ? Number(coords[0]) : null;
+        const lat = Array.isArray(coords) && coords.some(Number) ? Number(coords[1]) : null;
         const status = (b.status || 'pending').toLowerCase();
 
         return {
@@ -431,7 +434,14 @@ export class AdminService {
       ];
     }
 
-    // Compute Zones (District-level aggregation for heat map)
+    if (mongoose.connection.readyState !== 1) {
+      workersList = [];
+      bookingsList = [];
+      cooperativesList = [];
+    }
+
+    // Existing zone aggregation remains as a compatibility fallback, but the
+    // returned heat map below uses the persisted AI snapshot exclusively.
     const zoneMap = {};
     // Preload major Pune / Maharashtra administrative districts
     const defaultDistricts = [
@@ -525,52 +535,39 @@ export class AdminService {
       };
     });
 
+    const jobsByDistrict = new Map();
+    const jobsByService = new Map();
+    for (const booking of bookingsList) {
+      if (booking.district) jobsByDistrict.set(booking.district, (jobsByDistrict.get(booking.district) || 0) + 1);
+      if (booking.trade) jobsByService.set(booking.trade, (jobsByService.get(booking.trade) || 0) + 1);
+    }
+    const zoneIntelligence = await getLatestZoneIntelligence();
+    const aiZones = zoneIntelligence.zones.map(zone => ({
+      ...zone, id: String(zone.name).toLowerCase(), latitude: zone.coordinates[1], longitude: zone.coordinates[0],
+      activityLevel: zone.demandLevel.toLowerCase(), busyWorkers: Math.max(0, zone.activeWorkers - zone.availableWorkers),
+      ongoingJobs: Math.max(0, zone.activeWorkers - zone.availableWorkers), lastUpdated: zone.lastUpdated,
+    }));
+
     // Live Analytics Data for Charts
     const analytics = {
-      jobsPerDistrict: [
-        { district: 'Pune Central', jobs: 34, workers: 28 },
-        { district: 'Shivajinagar', jobs: 28, workers: 24 },
-        { district: 'Kothrud', jobs: 22, workers: 19 },
-        { district: 'Hinjawadi', jobs: 41, workers: 32 },
-        { district: 'Hadapsar', jobs: 19, workers: 16 },
-        { district: 'Pimpri', jobs: 26, workers: 21 },
-      ],
+      jobsPerDistrict: [...jobsByDistrict].map(([district, jobs]) => ({ district, jobs, workers: aiZones.find(zone => zone.name === district)?.activeWorkers || 0 })),
       workerUtilization: [
-        { name: 'Available', value: workersList.filter((w) => w.state === 'available').length || 14, color: '#10B981' },
-        { name: 'On Job', value: workersList.filter((w) => w.state === 'on_job').length || 6, color: '#F59E0B' },
-        { name: 'Busy', value: workersList.filter((w) => w.state === 'busy').length || 3, color: '#EF4444' },
-        { name: 'Offline', value: workersList.filter((w) => w.state === 'offline').length || 4, color: '#94A3B8' },
+        { name: 'Available', value: workersList.filter((w) => w.state === 'available').length, color: '#10B981' },
+        { name: 'On Job', value: workersList.filter((w) => w.state === 'on_job').length, color: '#F59E0B' },
+        { name: 'Busy', value: workersList.filter((w) => w.state === 'busy').length, color: '#EF4444' },
+        { name: 'Offline', value: workersList.filter((w) => w.state === 'offline').length, color: '#94A3B8' },
       ],
-      serviceCategoryDemand: [
-        { category: 'Electrical', count: 48 },
-        { category: 'Plumbing', count: 39 },
-        { category: 'Carpentry', count: 24 },
-        { category: 'AC & Appliance', count: 31 },
-        { category: 'Painting', count: 18 },
-        { category: 'Masonry', count: 12 },
-      ],
-      dailyBookings: [
-        { day: 'Mon', completed: 42, requested: 51 },
-        { day: 'Tue', completed: 48, requested: 56 },
-        { day: 'Wed', completed: 55, requested: 62 },
-        { day: 'Thu', completed: 51, requested: 58 },
-        { day: 'Fri', completed: 64, requested: 72 },
-        { day: 'Sat', completed: 78, requested: 89 },
-        { day: 'Sun', completed: 84, requested: 95 },
-      ],
-      cooperativePerformance: [
-        { name: 'Pune Shramik Sahakari', jobs: 142, rating: 4.88, compliance: 99 },
-        { name: 'Deccan Artisan Guild', jobs: 118, rating: 4.82, compliance: 97 },
-        { name: 'Maharashtra Tech Guild', jobs: 96, rating: 4.91, compliance: 100 },
-        { name: 'Hinjawadi Services Coop', jobs: 84, rating: 4.79, compliance: 96 },
-      ],
+      serviceCategoryDemand: [...jobsByService].map(([category, count]) => ({ category, count })),
+      dailyBookings: [],
+      cooperativePerformance: [],
     };
 
     return {
       workers: workersList,
       customerRequests: bookingsList,
       cooperatives: cooperativesList,
-      zones,
+      zones: aiZones,
+      zoneLastUpdated: zoneIntelligence.lastUpdated,
       analytics,
       summary: {
         totalWorkers: workersList.length,
@@ -590,10 +587,22 @@ export class AdminService {
    */
   static async getVerificationRequests(filter = {}) {
     const list = [];
+    const databaseConnected = mongoose.connection.readyState === 1;
+    const [coops, workers] = databaseConnected
+      ? await Promise.all([
+        Cooperative.find({})
+          .select('_id name registrationDetails.registrationNumber registrationDetails.state location.state location.district serviceCategories verificationStatus createdAt governance remarks')
+          .lean(),
+        Worker.find({})
+          .select('_id user cooperative skills experience.years experience.primaryTrade address location.address documents.aadhaar.name documents.addressProof.docType documents.addressProof.name documents.eshramCard.name verificationStatus.status verificationStatus.submittedAt verificationStatus.rejectionReason verificationStatus.documents.docType verificationStatus.documents.name verificationStatus.documents.verified registrationStatus name email phone phoneVerified profession customProfession rejectionReason eshramProvided rates createdAt')
+          .populate({ path: 'cooperative', select: 'name' })
+          .populate({ path: 'user', select: 'name email phone phoneVerified' })
+          .lean(),
+      ])
+      : [[], []];
 
     // 1. Fetch Cooperatives
-    if (mongoose.connection.readyState === 1) {
-      const coops = await Cooperative.find({});
+    if (databaseConnected) {
       for (const c of coops) {
         list.push({
           id: `COOP-${c._id}`,
@@ -606,9 +615,7 @@ export class AdminService {
           tradeOrServices: (c.serviceCategories || []).join(', ') || 'General Artisan Guild',
           status: c.verificationStatus || 'pending',
           submittedAt: c.createdAt || new Date().toISOString(),
-          documents: [
-            { docType: 'State Registration Certificate', url: c.registrationDetails?.certificateUrl || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600' },
-          ],
+          documents: [{ docType: 'State Registration Certificate' }],
           governance: c.governance || {},
           remarks: c.remarks || null,
         });
@@ -626,9 +633,7 @@ export class AdminService {
           tradeOrServices: (c.serviceCategories || []).join(', ') || 'General Artisan Guild',
           status: c.verificationStatus || 'pending',
           submittedAt: c.updatedAt || new Date().toISOString(),
-          documents: [
-            { docType: 'State Registration Certificate', url: c.registrationDetails?.certificateUrl || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600' },
-          ],
+          documents: [{ docType: 'State Registration Certificate' }],
           governance: c.governance || {},
           remarks: c.remarks || null,
         });
@@ -636,8 +641,7 @@ export class AdminService {
     }
 
     // 2. Fetch Workers
-    if (mongoose.connection.readyState === 1) {
-      const workers = await Worker.find({}).populate('cooperative').populate('user');
+    if (databaseConnected) {
       for (const w of workers) {
         const u = w.user && typeof w.user === 'object' ? w.user : {};
         const regStatus = w.registrationStatus || (w.verificationStatus?.status === 'verified' ? 'APPROVED' : w.verificationStatus?.status === 'rejected' ? 'REJECTED' : 'PENDING_APPROVAL');
@@ -670,7 +674,7 @@ export class AdminService {
           status: w.verificationStatus?.status || (regStatus === 'APPROVED' ? 'verified' : regStatus === 'REJECTED' ? 'rejected' : 'pending'),
           registrationStatus: regStatus,
           submittedAt: w.verificationStatus?.submittedAt || w.createdAt || new Date().toISOString(),
-          documents: docsList,
+          documents: docsList.map(({ docType, name }) => ({ docType, name })),
           eshramProvided: Boolean(w.eshramProvided || w.documents?.eshramCard?.url),
           cooperativeName: w.cooperative?.name || (w.cooperative ? String(w.cooperative) : 'Independent / None'),
           experienceYears: w.experience?.years || 0,
@@ -710,7 +714,7 @@ export class AdminService {
           status: w.verificationStatus?.status || (regStatus === 'APPROVED' ? 'verified' : regStatus === 'REJECTED' ? 'rejected' : 'pending'),
           registrationStatus: regStatus,
           submittedAt: w.verificationStatus?.submittedAt || w.updatedAt || new Date().toISOString(),
-          documents: docsList,
+          documents: docsList.map(({ docType, name }) => ({ docType, name })),
           eshramProvided: Boolean(w.eshramProvided || w.documents?.eshramCard?.url),
           cooperativeName: w.cooperative || 'Independent / None',
           experienceYears: w.experience?.years || 0,
@@ -726,6 +730,40 @@ export class AdminService {
       if (filter.status && filter.status !== 'all' && item.status !== filter.status) return false;
       return true;
     });
+  }
+
+  static async getVerificationDocuments(applicantType, applicantId) {
+    const type = String(applicantType || '').toLowerCase();
+    const id = String(applicantId || '');
+
+    if (type === 'cooperative') {
+      const cooperative = mongoose.connection.readyState === 1
+        ? await Cooperative.findById(id).select('registrationDetails.certificateUrl').lean()
+        : [...inMemoryCooperatives.values()].find(item => String(item.id || item._id) === id);
+      if (!cooperative) throw new AppError('Cooperative not found', 404);
+      return [{
+        docType: 'State Registration Certificate',
+        url: cooperative.registrationDetails?.certificateUrl || 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600',
+      }];
+    }
+
+    if (type === 'worker') {
+      const worker = mongoose.connection.readyState === 1
+        ? await Worker.findById(id)
+          .select('documents.aadhaar.url documents.aadhaar.name documents.addressProof.docType documents.addressProof.url documents.addressProof.name documents.eshramCard.url documents.eshramCard.name verificationStatus.documents')
+          .lean()
+        : inMemoryWorkers.get(id) || [...inMemoryWorkers.values()].find(item => String(item.id) === id);
+      if (!worker) throw new AppError('Worker not found', 404);
+
+      const documents = [];
+      if (worker.documents?.aadhaar?.url) documents.push({ docType: 'Aadhaar Card', url: worker.documents.aadhaar.url, name: worker.documents.aadhaar.name });
+      if (worker.documents?.addressProof?.url) documents.push({ docType: worker.documents.addressProof.docType || 'Address Proof', url: worker.documents.addressProof.url, name: worker.documents.addressProof.name });
+      if (worker.documents?.eshramCard?.url) documents.push({ docType: 'e-Shram Card', url: worker.documents.eshramCard.url, name: worker.documents.eshramCard.name });
+      if (documents.length === 0 && Array.isArray(worker.verificationStatus?.documents)) documents.push(...worker.verificationStatus.documents);
+      return documents;
+    }
+
+    throw new AppError('Applicant type must be worker or cooperative', 400);
   }
 
   /**

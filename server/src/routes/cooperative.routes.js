@@ -1,6 +1,6 @@
 import { cooperativeProfile } from '../controllers/directory.controller.js';
 import { Router } from 'express';
-import { body } from 'express-validator';
+import { body, param } from 'express-validator';
 import * as cooperativeController from '../controllers/cooperative.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorizeRoles } from '../middleware/role.middleware.js';
@@ -55,6 +55,9 @@ router.get('/requests', authorizeRoles('cooperative', 'admin'), cooperativeContr
 
 // GET /api/v1/cooperatives/zone-shift-suggestions
 router.get('/zone-shift-suggestions', authorizeRoles('cooperative', 'admin'), cooperativeController.getZoneShiftSuggestions);
+router.post('/zone-shift-suggestions/:workerId/recommend', authorizeRoles('cooperative', 'admin'), [
+  param('workerId').isMongoId().withMessage('A valid worker ID is required'), validate,
+], cooperativeController.recommendZoneShift);
 
 // POST /api/v1/cooperatives/assign-worker
 router.post(

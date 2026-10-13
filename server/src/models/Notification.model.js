@@ -11,6 +11,7 @@ export const NOTIFICATION_TYPES = {
   VERIFICATION_PENDING: 'Verification', WORKER_REGISTERED: 'Verification', COOPERATIVE_REGISTERED: 'Verification',
   WORKER_JOINED: 'Booking', WORKER_UNAVAILABLE: 'Booking',
   HIGH_DEMAND: 'System', WORKER_SHORTAGE: 'System', COMPLAINT_SUBMITTED: 'System', API_FAILURE: 'System',
+  ZONE_SHIFT_OFFER: 'System', ZONE_SHIFT_RECOMMENDATION: 'System', ZONE_SHIFT_ACCEPTED: 'System', ZONE_SHIFT_SHORTAGE: 'System',
 };
 
 const schema = new mongoose.Schema({

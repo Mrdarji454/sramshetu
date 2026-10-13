@@ -329,6 +329,9 @@ async function runRegistrationFlowTests() {
   assert(workerReq.eshramProvided === true, 'Admin: Shows e-Shram card status');
   assert(workerReq.cooperativeName === 'Independent / None', 'Admin: Correctly displays Independent / None when cooperative omitted');
   assert(workerReq.skills.length === 2 && workerReq.skills[0].serviceRadiusKm === 25, 'Admin: Preserves per-skill radius');
+  assert(workerReq.documents.length > 0 && !workerReq.documents[0].url, 'Admin: Queue returns document labels without file URLs');
+  const verificationDocuments = await AdminService.getVerificationDocuments('worker', workerReq.applicantId);
+  assert(verificationDocuments.some((document) => document.url === 'https://example.com/ebill.pdf'), 'Admin: Loads uploaded document URL on demand');
 
   // 2. Admin Rejection with remarks
   const rejectResult = await AdminService.reviewVerification({

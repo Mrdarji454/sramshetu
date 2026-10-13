@@ -37,6 +37,7 @@ import {
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { bookingService } from "../../services/booking.service";
+import cooperativeService from "../../services/cooperative.service";
 import { paymentStatusLabel } from "../../utils/paymentStatus";
 import { routeService } from "../../services/route.service";
 
@@ -423,6 +424,7 @@ export function CooperativeOperationsCenter({
   cooperative,
   workers = [],
   bookings = [],
+  shiftSuggestions = [],
   isLoading = false,
   onRefresh,
   onNavigate,
@@ -433,6 +435,7 @@ export function CooperativeOperationsCenter({
   const [selectedZone, setSelectedZone] = useState(null);
   const [routeSummary, setRouteSummary] = useState(null);
   const [confirmingCashId, setConfirmingCashId] = useState(null);
+  const [recommendingWorkerId, setRecommendingWorkerId] = useState(null);
   const confirmCash = async (booking) => {
     const id = booking.id || booking._id;
     setConfirmingCashId(id);
@@ -443,6 +446,17 @@ export function CooperativeOperationsCenter({
       alert(error.message || "Cash receipt could not be confirmed");
     } finally {
       setConfirmingCashId(null);
+    }
+  };
+  const recommendShift = async (workerId) => {
+    setRecommendingWorkerId(workerId);
+    try {
+      await cooperativeService.recommendZoneShift(workerId);
+      await onRefresh?.();
+    } catch (error) {
+      alert(error.message || "Zone shift recommendation could not be sent");
+    } finally {
+      setRecommendingWorkerId(null);
     }
   };
   const selectedBooking = useMemo(
@@ -892,6 +906,22 @@ export function CooperativeOperationsCenter({
           </Button>
         </div>
       </div>
+
+      {shiftSuggestions.length > 0 && (
+        <section className="rounded-lg border border-orange-200 bg-orange-50 p-4">
+          <h3 className="text-sm font-bold text-brand-navy-900">AI zone shift recommendations</h3>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {shiftSuggestions.map(item => (
+              <div key={item.id || item.workerId} className="rounded-lg border border-orange-200 bg-white p-3 text-xs">
+                <div className="flex items-center justify-between gap-2"><strong>{item.workerName}</strong><Badge variant="saffron" size="sm">{item.priority}</Badge></div>
+                <p className="mt-1">{item.currentZone} → {item.suggestedZone} • {item.profession} • {item.distance} km</p>
+                <p className="mt-1 text-slate-500">{item.reason}</p>
+                <Button className="mt-3" size="sm" loading={recommendingWorkerId === item.workerId} onClick={() => recommendShift(item.workerId)}>Accept / Assign</Button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
         {statCards.map((stat) => (

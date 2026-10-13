@@ -1,7 +1,7 @@
 import { AdminService } from '../services/admin.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { successResponse } from '../utils/apiResponse.js';
-import { getAdminZoneShiftRecommendations } from '../services/zoneShift.service.js';
+import { getAdminZoneShiftRecommendations, recommendShiftToWorker } from '../services/zoneShift.service.js';
 
 export const getSystemStats = asyncHandler(async (req, res) => {
   const stats = await AdminService.getSystemStats();
@@ -12,6 +12,11 @@ export const getVerificationRequests = asyncHandler(async (req, res) => {
   const { status, type } = req.query;
   const requests = await AdminService.getVerificationRequests({ status, type });
   return successResponse(res, requests, 'Verification requests retrieved', 200);
+});
+
+export const getVerificationDocuments = asyncHandler(async (req, res) => {
+  const documents = await AdminService.getVerificationDocuments(req.params.applicantType, req.params.applicantId);
+  return successResponse(res, documents, 'Verification documents retrieved', 200);
 });
 
 export const reviewVerification = asyncHandler(async (req, res) => {
@@ -42,4 +47,9 @@ export const getComplaints = asyncHandler(async (req, res) => {
 export const getZoneShiftRecommendations = asyncHandler(async (req, res) => {
   const recommendations = await getAdminZoneShiftRecommendations();
   return successResponse(res, recommendations, 'Zone shift recommendations retrieved', 200);
+});
+
+export const recommendZoneShift = asyncHandler(async (req, res) => {
+  const recommendation = await recommendShiftToWorker(req.params.workerId, req.user._id || req.user.id, true);
+  return successResponse(res, recommendation, 'Zone shift recommendation sent to worker', 200);
 });

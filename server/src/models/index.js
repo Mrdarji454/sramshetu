@@ -5,4 +5,5 @@ export { Service } from './Service.model.js';
 export { Booking } from './Booking.model.js';
 export { Review } from './Review.model.js';
 export { Notification } from './Notification.model.js';
+export { ZoneDemandSnapshot } from './ZoneDemandSnapshot.model.js';
 
