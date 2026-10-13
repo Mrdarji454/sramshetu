@@ -123,6 +123,7 @@ export function BookingWizardModal({
   const [selectedSlot, setSelectedSlot] = useState("morning");
   const [startTime, setStartTime] = useState("10:00");
   const [specialInstructions, setSpecialInstructions] = useState("");
+  const [paymentMethodPreference, setPaymentMethodPreference] = useState("ONLINE");
 
   // Step 2: Location & GPS
   const [locationData, setLocationData] = useState({
@@ -511,6 +512,7 @@ export function BookingWizardModal({
         },
         cooperativeId: targetCoopId,
         workerId: targetWorkerId,
+        paymentMethodPreference,
         specialInstructions: (specialInstructions || jobDescription).trim(),
         price: {
           floorRateAmount: hourlyFloor,
@@ -688,6 +690,11 @@ export function BookingWizardModal({
                   </span>
                 </div>
 
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Payment Method:</span>
+                  <span className="font-bold text-slate-900">{createdBooking.paymentMethodPreference === "CASH" ? "Cash on Delivery" : "Online Payment (Razorpay)"}</span>
+                </div>
+
                 {createdBooking.paymentProvider?.invoiceUrl && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">Digital invoice:</span>
@@ -737,22 +744,6 @@ export function BookingWizardModal({
               )}
 
               <div className="pt-2 flex justify-center gap-3">
-                {paymentsEnabled &&
-                  ["pending", "failed"].includes(paymentStatus) && (
-                    <Button
-                      variant="primary"
-                      size="md"
-                      disabled={isPaying}
-                      icon={ShieldCheck}
-                      onClick={handlePayment}
-                    >
-                      {isPaying
-                        ? "Confirming payment…"
-                        : retryingVerification
-                          ? "Retry verification"
-                          : `Pay ₹${createdBooking.price?.totalAmount ?? 0}`}
-                    </Button>
-                  )}
                 <Button
                   variant="primary"
                   size="md"
@@ -1421,17 +1412,28 @@ export function BookingWizardModal({
                     </div>
                   </div>
 
+                  <fieldset className="p-4 rounded-2xl border border-slate-200 bg-white text-sm text-slate-800">
+                    <legend className="px-1 text-xs font-bold uppercase tracking-wider text-slate-500">Payment Method</legend>
+                    <label className="mr-6 inline-flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="paymentMethod" value="ONLINE" checked={paymentMethodPreference === "ONLINE"} onChange={() => setPaymentMethodPreference("ONLINE")} />
+                      Online Payment (Razorpay)
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="paymentMethod" value="CASH" checked={paymentMethodPreference === "CASH"} onChange={() => setPaymentMethodPreference("CASH")} />
+                      Cash on Delivery
+                    </label>
+                  </fieldset>
+
                   {/* Real Payment State Notice */}
                   <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-950 flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold">Secure payment after booking</p>
                       <p className="text-amber-900 text-[11px] mt-0.5 leading-relaxed">
-                        Review the confirmed booking amount, then pay through
-                        Razorpay Checkout. Verified payment locks the booking
-                        escrow before Start OTP verification. End OTP
-                        verification releases the payment and makes your invoice
-                        available.
+                        No payment is collected now. After the worker completes
+                        the job and verifies the End-Work OTP, you can pay online
+                        with Razorpay or choose Cash on Delivery. The invoice is
+                        available after payment confirmation.
                       </p>
                     </div>
                   </div>

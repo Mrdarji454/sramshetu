@@ -12,6 +12,8 @@ import {
   Camera,
   Check,
   AlertCircle,
+  Building2,
+  Wallet,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 
@@ -26,6 +28,12 @@ export function WorkerProfileModal({ profile, onClose, onSave, isLoading }) {
     bio: profile?.bio || profile?.experience?.bio || "",
     profileImage: profile?.profileImage || "",
     phone: profile?.phone || "",
+    payoutDetails: {
+      upiId: profile?.payoutDetails?.upiId || "",
+      bankAccountNumber: profile?.payoutDetails?.bankAccountNumber || "",
+      ifsc: profile?.payoutDetails?.ifsc || "",
+      accountHolderName: profile?.payoutDetails?.accountHolderName || "",
+    },
   });
   const [saveMessage, setSaveMessage] = useState(null);
   const [error, setError] = useState(null);
@@ -38,6 +46,12 @@ export function WorkerProfileModal({ profile, onClose, onSave, isLoading }) {
         bio: profile?.bio || profile?.experience?.bio || "",
         profileImage: profile?.profileImage || "",
         phone: profile?.phone || "",
+        payoutDetails: {
+          upiId: profile?.payoutDetails?.upiId || "",
+          bankAccountNumber: profile?.payoutDetails?.bankAccountNumber || "",
+          ifsc: profile?.payoutDetails?.ifsc || "",
+          accountHolderName: profile?.payoutDetails?.accountHolderName || "",
+        },
       });
     }
   }, [profile]);
@@ -387,6 +401,135 @@ export function WorkerProfileModal({ profile, onClose, onSave, isLoading }) {
                       profile?.experience?.bio ||
                       "No bio added yet"}
                   </p>
+                )}
+              </div>
+
+              {/* Bank Account & UPI Settlement Details (DBT) */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-emerald-600" />
+                    Bank & UPI Payout Details (Direct Settlement)
+                  </label>
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                    100% Floor Wage Payout
+                  </span>
+                </div>
+
+                {isEditing ? (
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <span className="font-semibold text-slate-600 block mb-1">
+                        UPI ID (e.g. name@okhdfcbank or 9820144019@upi)
+                      </span>
+                      <input
+                        type="text"
+                        value={editData.payoutDetails?.upiId || ""}
+                        onChange={(e) =>
+                          setEditData((prev) => ({
+                            ...prev,
+                            payoutDetails: {
+                              ...prev.payoutDetails,
+                              upiId: e.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="yourname@upi"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <span className="font-semibold text-slate-600 block mb-1">
+                          Account Holder Name
+                        </span>
+                        <input
+                          type="text"
+                          value={
+                            editData.payoutDetails?.accountHolderName || ""
+                          }
+                          onChange={(e) =>
+                            setEditData((prev) => ({
+                              ...prev,
+                              payoutDetails: {
+                                ...prev.payoutDetails,
+                                accountHolderName: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="Full Name as in Bank"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs"
+                        />
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-600 block mb-1">
+                          Bank Account Number
+                        </span>
+                        <input
+                          type="text"
+                          value={
+                            editData.payoutDetails?.bankAccountNumber || ""
+                          }
+                          onChange={(e) =>
+                            setEditData((prev) => ({
+                              ...prev,
+                              payoutDetails: {
+                                ...prev.payoutDetails,
+                                bankAccountNumber: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="Account Number"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-600 block mb-1">
+                        IFSC Code
+                      </span>
+                      <input
+                        type="text"
+                        value={editData.payoutDetails?.ifsc || ""}
+                        onChange={(e) =>
+                          setEditData((prev) => ({
+                            ...prev,
+                            payoutDetails: {
+                              ...prev.payoutDetails,
+                              ifsc: e.target.value.toUpperCase(),
+                            },
+                          }))
+                        }
+                        placeholder="e.g. SBIN0001234"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono uppercase"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 text-xs text-slate-700">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">UPI ID:</span>
+                      <span className="font-semibold font-mono">
+                        {profile?.payoutDetails?.upiId || "Not added yet"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Bank Account:</span>
+                      <span className="font-semibold font-mono">
+                        {profile?.payoutDetails?.bankAccountNumber
+                          ? `•••• •••• ${profile.payoutDetails.bankAccountNumber.slice(-4)}`
+                          : "Not added yet"}
+                      </span>
+                    </div>
+                    {profile?.payoutDetails?.ifsc && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">IFSC Code:</span>
+                        <span className="font-semibold font-mono">
+                          {profile.payoutDetails.ifsc}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 

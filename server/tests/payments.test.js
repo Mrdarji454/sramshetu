@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { buildInvoicePdf, captureAuthorizedPayment, verifyRazorpaySignature } from '../src/services/payment.service.js';
+import { Payment } from '../src/models/Payment.model.js';
+import paymentRoutes from '../src/routes/payment.routes.js';
 
 const orderId = 'order_test_123';
 const paymentId = 'pay_test_456';
@@ -58,7 +60,28 @@ assert.equal(invoice.subarray(0, 8).toString(), '%PDF-1.4');
 assert.match(invoice.toString(), /SS-2026-12345678/);
 assert.match(invoice.toString(), /1250\.50 INR/);
 
+const paymentStates = Payment.schema.path('paymentStatus').enumValues;
+for (const state of ['PENDING', 'WORK_COMPLETED', 'PAYMENT_PENDING', 'CASH_PENDING', 'CASH_RECEIVED', 'PAID']) {
+    assert.ok(paymentStates.includes(state));
+}
+const completedWorkPayment = new Payment({
+    booking: '65f123456789012345678951', bookingId: '65f123456789012345678951',
+    customer: '65f123456789012345678901', userId: '65f123456789012345678901',
+    amount: 90000, currency: 'INR', paymentStatus: 'WORK_COMPLETED', status: 'WORK_COMPLETED',
+});
+assert.equal(completedWorkPayment.validateSync(), undefined);
+assert.equal(completedWorkPayment.razorpayOrderId, null);
+
+const routePaths = paymentRoutes.stack.filter(layer => layer.route).map(layer => `${Object.keys(layer.route.methods)[0].toUpperCase()} ${layer.route.path}`);
+assert.ok(routePaths.includes('POST /create-order'));
+assert.ok(routePaths.includes('POST /verify'));
+assert.ok(routePaths.includes('GET /:bookingId'));
+assert.ok(routePaths.includes('POST /cash'));
+assert.ok(routePaths.includes('POST /:bookingId/confirm-cash'));
+assert.ok(!routePaths.some(path => path.includes('verify-payment') || path.includes('payment-status')));
+
 console.log('PASS: Razorpay signatures are verified without timing-unsafe comparison');
 console.log('PASS: Invalid and mismatched payment signatures are rejected');
 console.log('PASS: Authorized Razorpay payments are captured before escrow is locked');
 console.log('PASS: A valid digital invoice PDF is generated');
+console.log('PASS: Post-work Razorpay and cash payment states and APIs are registered');

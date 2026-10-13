@@ -80,6 +80,11 @@ export const cooperativeService = {
     const response = await apiClient.get('/cooperatives/zone-shift-suggestions');
     return response.data || response;
   },
+
+  async recommendZoneShift(workerId) {
+    const response = await apiClient.post(`/cooperatives/zone-shift-suggestions/${workerId}/recommend`);
+    return response.data || response;
+  },
 };
 
 export default cooperativeService;

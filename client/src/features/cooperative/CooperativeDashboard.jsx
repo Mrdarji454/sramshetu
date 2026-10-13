@@ -46,6 +46,7 @@ export function CooperativeDashboard() {
   const [verification, setVerification] = useState(null);
   const [members, setMembers] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [zoneShiftSuggestions, setZoneShiftSuggestions] = useState([]);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -154,12 +155,13 @@ export function CooperativeDashboard() {
   const loadData = async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
     try {
-      const [profData, verData, membersData, bookingsData] =
+      const [profData, verData, membersData, bookingsData, zoneShiftData] =
         await Promise.allSettled([
           cooperativeService.getProfile(),
           cooperativeService.getVerificationStatus(),
           cooperativeService.getMembers(),
           bookingService.getBookings({ role: "cooperative" }),
+          cooperativeService.getZoneShiftSuggestions(),
         ]);
 
       if (profData.status === "fulfilled" && profData.value) {
@@ -182,6 +184,9 @@ export function CooperativeDashboard() {
         Array.isArray(bookingsData.value)
       ) {
         setBookings(bookingsData.value);
+      }
+      if (zoneShiftData.status === "fulfilled") {
+        setZoneShiftSuggestions(zoneShiftData.value?.recommendations || (Array.isArray(zoneShiftData.value) ? zoneShiftData.value : []));
       }
     } catch (err) {
       console.error("Error loading cooperative dashboard:", err);
@@ -465,6 +470,7 @@ export function CooperativeDashboard() {
                 cooperative={profile}
                 workers={members}
                 bookings={bookings}
+                shiftSuggestions={zoneShiftSuggestions}
                 isLoading={isLoading}
                 onRefresh={loadData}
                 onNavigate={setActiveTab}

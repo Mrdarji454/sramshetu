@@ -73,11 +73,11 @@ await test('Premature reviews are rejected', async () => {
   await assert.rejects(() => submitReview(id, customer, { rating: 5 }), { statusCode: 409 });
 });
 const end = await issueWorkOtp(id, 'end', customer, 'USER');
-await test('Independent completion code completes directly without fabricating payment release', async () => {
+await test('Independent completion code unlocks payment without fabricating payment confirmation', async () => {
   assert.notEqual(booking.endOTP.salt, booking.startOTP.salt);
   const completed = await verifyWorkOtp(id, 'end', end.code, worker, 'WORKER');
   assert.equal(completed.status, 'COMPLETED');
-  assert.equal(completed.paymentStatus, 'not_required');
+  assert.equal(completed.paymentStatus, 'WORK_COMPLETED');
   await assert.rejects(() => verifyWorkOtp(id, 'end', end.code, worker, 'WORKER'), { statusCode: 409 });
   const reloaded = await BookingService.getBookingById(id, customer, 'USER');
   assert.equal(reloaded.status, 'COMPLETED');

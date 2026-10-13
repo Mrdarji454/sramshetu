@@ -264,6 +264,20 @@ export function WorkerDashboard() {
     }
   };
 
+  const handleConfirmCash = async (job) => {
+    const jobId = job.id || job._id;
+    setIsProcessingId(jobId);
+    try {
+      await bookingService.confirmCashReceived(jobId);
+      setActionSuccessMsg("Cash payment received and confirmed.");
+      await loadData();
+    } catch (err) {
+      alert(err.message || "Cash receipt could not be confirmed");
+    } finally {
+      setIsProcessingId(null);
+    }
+  };
+
   const handleSaveProfile = async (editData) => {
     setIsSavingProfile(true);
     try {
@@ -964,13 +978,17 @@ export function WorkerDashboard() {
                                   <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                                   <span>
                                     Service Completed • ₹
-                                    {job.price?.totalAmount || 900} Settled via
-                                    DBT Escrow
+                                    {job.price?.totalAmount || 900} Payment status:{" "}
+                                    {String(job.paymentStatus || "WORK_COMPLETED").replaceAll("_", " ")}
                                   </span>
                                 </div>
-                                <Badge variant="verified" size="sm">
-                                  Paid in Full
-                                </Badge>
+                                {String(job.paymentStatus).toUpperCase() === "CASH_PENDING" ? (
+                                  <Button size="sm" loading={isProcessing} onClick={() => handleConfirmCash(job)}>Confirm Cash Received</Button>
+                                ) : (
+                                  <Badge variant="verified" size="sm">
+                                    {String(job.paymentStatus).toUpperCase() === "PAID" ? "Paid in Full" : "Payment Pending"}
+                                  </Badge>
+                                )}
                               </div>
                             )}
                           </div>
@@ -997,6 +1015,12 @@ export function WorkerDashboard() {
                     You are currently assigned to <strong>{zoneShiftOffers[0]?.currentZone || "your local zone"}</strong> and can be reassigned to <strong>{zoneShiftOffers[0]?.suggestedZone}</strong>.
                     {zoneShiftOffers[0]?.distanceKm ? ` Distance: ${zoneShiftOffers[0].distanceKm} km.` : ""}
                   </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-700">
+                    <span>Expected Jobs: <strong>{zoneShiftOffers[0]?.expectedJobs ?? 0}</strong></span>
+                    <span>Profession: <strong>{zoneShiftOffers[0]?.profession}</strong></span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-600">{zoneShiftOffers[0]?.reason}</p>
+                  {zoneShiftOffers[0]?.source === "RULE_BASED_FALLBACK" && <p className="mt-1 text-xs font-bold text-amber-700">Rule-based fallback</p>}
                 </div>
                 <div className="flex gap-2">
                   <Button

@@ -60,6 +60,21 @@ export function StatusBadge({ status, label, size = 'md', className }) {
     },
 
     // Payments & Escrow
+    payment_pending: {
+      label: 'Payment Pending',
+      bg: 'bg-amber-50 text-amber-900 border-amber-300',
+      dot: 'bg-amber-600',
+    },
+    escrow_locked: {
+      label: 'Escrow Locked',
+      bg: 'bg-amber-50 text-amber-900 border-amber-300',
+      dot: 'bg-amber-600',
+    },
+    work_started: {
+      label: 'Work Started',
+      bg: 'bg-teal-50 text-teal-800 border-teal-200',
+      dot: 'bg-teal-500',
+    },
     escrow_held: {
       label: 'Escrow Locked',
       bg: 'bg-amber-50 text-amber-900 border-amber-300',
@@ -71,7 +86,7 @@ export function StatusBadge({ status, label, size = 'md', className }) {
       dot: 'bg-amber-600 animate-pulse',
     },
     released: {
-      label: 'DBT Settled (100%)',
+      label: 'Payment Released',
       bg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
       dot: 'bg-emerald-500',
     },

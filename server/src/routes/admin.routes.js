@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { body } from 'express-validator';
+import { body, param } from 'express-validator';
 import * as adminController from '../controllers/admin.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { authorizeRoles } from '../middleware/role.middleware.js';
@@ -15,6 +15,10 @@ router.get('/stats', adminController.getSystemStats);
 
 // GET /api/v1/admin/verifications
 router.get('/verifications', adminController.getVerificationRequests);
+router.get('/verifications/:applicantType/:applicantId/documents', [
+  param('applicantType').isIn(['worker', 'cooperative']).withMessage('Applicant type must be worker or cooperative'),
+  validate,
+], adminController.getVerificationDocuments);
 
 // PATCH /api/v1/admin/verifications/:id/review & POST /api/v1/admin/verifications/review
 router.patch(
@@ -46,6 +50,9 @@ router.get('/live-dispatch', adminController.getLiveDispatch);
 
 // GET /api/v1/admin/zone-shift-recommendations
 router.get('/zone-shift-recommendations', adminController.getZoneShiftRecommendations);
+router.post('/zone-shift-recommendations/:workerId/recommend', [
+  param('workerId').isMongoId().withMessage('A valid worker ID is required'), validate,
+], adminController.recommendZoneShift);
 
 // GET /api/v1/admin/complaints
 router.get('/complaints', adminController.getComplaints);

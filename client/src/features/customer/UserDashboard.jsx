@@ -187,7 +187,7 @@ export function UserDashboard() {
     (b) => !["COMPLETED", "CANCELLED"].includes((b.status || "").toUpperCase()),
   ).length;
   const escrowRecorded = bookings
-    .filter((b) => ["held", "escrow_locked"].includes(b.paymentStatus))
+    .filter((b) => ["PAYMENT_PENDING", "CASH_PENDING", "CASH_RECEIVED", "held", "escrow_locked"].includes(b.paymentStatus))
     .reduce((sum, b) => sum + (b.price?.totalAmount || b.escrowAmount || 0), 0);
   const paymentRecordCount = bookings.filter((b) =>
     Boolean(b.paymentStatus),
@@ -558,6 +558,11 @@ export function UserDashboard() {
                   const paymentLabel =
                     {
                       pending: "Payment Pending",
+                      work_completed: "Work Completed - Payment Available",
+                      payment_pending: "Online Payment Pending",
+                      cash_pending: "Cash Pending",
+                      cash_received: "Cash Received",
+                      paid: "Payment Completed",
                       held: "Escrow Locked",
                       escrow_locked: "Escrow Locked",
                       released: "Payment Released",

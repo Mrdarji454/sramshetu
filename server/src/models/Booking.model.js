@@ -153,6 +153,13 @@ const bookingSchema = new mongoose.Schema(
       type: String,
       enum: {
         values: [
+          'PENDING',
+          'WORK_COMPLETED',
+          'PAYMENT_PENDING',
+          'CASH_PENDING',
+          'CASH_RECEIVED',
+          'PAID',
+          'FAILED',
           'pending',
           'held',
           'escrow_locked',
@@ -164,9 +171,19 @@ const bookingSchema = new mongoose.Schema(
         ],
         message: '{VALUE} is not a valid payment status',
       },
-      default: 'pending',
+      default: 'PENDING',
       index: true,
       alias: 'escrowStatus',
+    },
+    paymentMethodPreference: {
+      type: String,
+      enum: ['ONLINE', 'CASH'],
+      default: 'ONLINE',
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['RAZORPAY', 'CASH'],
+      default: null,
     },
     paymentRecord: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment', default: null },
     paymentProvider: {

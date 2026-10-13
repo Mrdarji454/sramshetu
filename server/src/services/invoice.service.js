@@ -89,7 +89,8 @@ function nameOf(snapshot, entity, fallback) {
 }
 
 function statusDetails(booking, payment) {
-    const status = String(payment.status || '').toLowerCase();
+    const status = String(payment.paymentStatus || payment.status || '').toLowerCase();
+    if (status === 'paid') return ['Payment Completed', `Payment was confirmed after End-Work OTP verification via ${payment.paymentMethod === 'CASH' ? 'Cash on Delivery' : 'Razorpay'}.`];
     if (status === 'refunded') return ['Refunded', 'The payment refund is recorded below.'];
     if (status === 'released') return ['Payment Released', 'ShramSetu payment release was recorded after End OTP verification. This invoice records the application ledger; it is not bank settlement confirmation.'];
     if (['held', 'escrow_locked'].includes(status)) return [
@@ -187,8 +188,10 @@ export function buildInvoicePdf(booking, payment) {
     if (booking.scheduledTime?.start || booking.scheduledDate) field('Scheduled', dateText(booking.scheduledTime?.start || booking.scheduledDate));
 
     section('Payment details');
-    field('Razorpay order ID', payment.razorpayOrderId);
-    field('Razorpay payment ID', payment.razorpayPaymentId);
+    field('Payment method', payment.paymentMethod === 'CASH' ? 'Cash on Delivery' : 'Razorpay');
+    if (payment.razorpayOrderId) field('Razorpay order ID', payment.razorpayOrderId);
+    if (payment.razorpayPaymentId) field('Razorpay payment ID', payment.razorpayPaymentId);
+    if (payment.receiptId) field('Transaction / receipt ID', payment.receiptId);
     field('Payment received', dateText(payment.paidAt));
     if (payment.releasedAt) field('Release recorded', dateText(payment.releasedAt));
     if (booking.endOTP?.usedAt) field('End OTP verified', dateText(booking.endOTP.usedAt));

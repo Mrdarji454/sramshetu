@@ -40,6 +40,7 @@ export function LiveDispatchMap({
   workers = [],
   customerRequests = [],
   zones = [],
+  shiftRecommendations = [],
   selectedBooking = null,
   selectedWorker = null,
   onSelectBooking,
@@ -107,12 +108,8 @@ export function LiveDispatchMap({
     // 1. Render Zone Heat Map if enabled
     if (showHeatMap || activeFilter === 'heatmap') {
       zones.forEach((zone) => {
-        const color =
-          zone.activityLevel === 'high'
-            ? '#EF4444' // Red
-            : zone.activityLevel === 'medium'
-            ? '#F59E0B' // Yellow/Amber
-            : '#10B981'; // Green
+        const demandLevel = String(zone.demandLevel || zone.activityLevel || 'LOW').toUpperCase();
+        const color = demandLevel === 'CRITICAL' ? '#DC2626' : demandLevel === 'HIGH' ? '#F97316' : demandLevel === 'MEDIUM' ? '#EAB308' : '#16A34A';
 
         const circle = L.circle([zone.latitude, zone.longitude], {
           radius: 3500,
@@ -130,6 +127,10 @@ export function LiveDispatchMap({
               📍 ${escapeHtml(zone.name)}
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
+              <span style="color: #64748B;">Predicted Demand:</span>
+              <b style="color: #0F172A;">${zone.predictedDemand ?? 0}</b>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
               <span style="color: #64748B;">Active Workers:</span>
               <b style="color: #0F172A;">${zone.activeWorkers}</b>
             </div>
@@ -138,20 +139,26 @@ export function LiveDispatchMap({
               <b style="color: #10B981;">${zone.availableWorkers}</b>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
-              <span style="color: #64748B;">Busy / On-Job:</span>
-              <b style="color: #F59E0B;">${zone.busyWorkers}</b>
+              <span style="color: #64748B;">Pending Bookings:</span>
+              <b style="color: #F59E0B;">${zone.pendingBookings ?? 0}</b>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
-              <span style="color: #64748B;">Ongoing Jobs:</span>
-              <b style="color: #3B82F6;">${zone.ongoingJobs}</b>
+              <span style="color: #64748B;">Demand-Supply Gap:</span>
+              <b style="color: #3B82F6;">${zone.demandSupplyGap ?? 0}</b>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+              <span style="color: #64748B;">Required / Incoming:</span>
+              <b>${zone.requiredWorkers ?? 0} / ${zone.suggestedIncomingWorkers ?? 0}</b>
             </div>
             <div style="font-size: 10px; color: ${color}; font-weight: bold; text-align: right; text-transform: uppercase;">
-              Activity: ${escapeHtml(zone.activityLevel)}
+              ${escapeHtml(demandLevel)} • ${escapeHtml(zone.source === 'RULE_BASED_FALLBACK' ? 'Rule-based fallback' : 'AI prediction')}<br/>
+              Updated: ${escapeHtml(zone.lastUpdated ? new Date(zone.lastUpdated).toLocaleString('en-IN') : 'Pending')}
             </div>
           </div>
         `;
 
         circle.bindTooltip(tooltipContent, { permanent: false, sticky: true, opacity: 0.95 });
+        circle.bindPopup(tooltipContent, { maxWidth: 280 });
 
         // Click on zone zooms into district
         circle.on('click', () => {
@@ -159,6 +166,17 @@ export function LiveDispatchMap({
         });
 
         zoneLayersRef.current.push(circle);
+      });
+
+      shiftRecommendations.forEach((recommendation) => {
+        const from = recommendation.sourceCoordinates;
+        const to = recommendation.targetCoordinates;
+        if (!Array.isArray(from) || !Array.isArray(to) || from.length !== 2 || to.length !== 2) return;
+        const line = L.polyline([[from[1], from[0]], [to[1], to[0]]], {
+          color: recommendation.priority === 'Critical' ? '#DC2626' : '#7C3AED', weight: 3, opacity: 0.8, dashArray: '8, 7',
+        }).addTo(map);
+        line.bindTooltip(`<b>${escapeHtml(recommendation.currentZone)} → ${escapeHtml(recommendation.suggestedZone)}</b><br/>${escapeHtml(recommendation.reason)}<br/>Worker: ${escapeHtml(recommendation.workerName)}`);
+        zoneLayersRef.current.push(line);
       });
     }
 
@@ -342,7 +360,7 @@ export function LiveDispatchMap({
     if (bounds.isValid() && (workers.length > 0 || customerRequests.length > 0)) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     }
-  }, [workers, customerRequests, zones, selectedBooking, selectedWorker, activeFilter, showHeatMap]);
+  }, [workers, customerRequests, zones, shiftRecommendations, selectedBooking, selectedWorker, activeFilter, showHeatMap]);
 
   return (
     <div className={className}>
@@ -367,6 +385,10 @@ export function LiveDispatchMap({
         <div className="flex items-center gap-2 text-[11px] font-medium text-slate-700">
           <span className="w-2.5 h-2.5 rounded-md bg-orange-600 shadow-sm"></span>
           <span>Citizen Booking Request</span>
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 text-[10px] font-semibold">
+          <span className="text-emerald-700">● Low</span><span className="text-yellow-700">● Medium</span>
+          <span className="text-orange-700">● High</span><span className="text-red-700">● Critical</span>
         </div>
       </div>
     </div>
